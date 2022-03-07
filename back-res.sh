@@ -1,9 +1,21 @@
 #! /bin/bash
-version="0.10.0 from 2021-04-24"
+version="0.11.0 from 2021-07-12"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
 # CHANGELOG:
+# -----------------------------------------------------------------------------
+# version 0.11.0 - 2021-07-12 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+# --------------------------
+# - Get DB user from ISPC config file
+# - Added pause after every directory compression
+# - Use ".part" suffix for directory backup temporary files
+#   If the process is interrupted you will know which file is incomplete
+# - Added a maximum time for directory compression to run
+# - Added a time for intervals within a compression
+# - Added total running time of backup in log file
+# - Added nice 19 to all commands
+# - Added reboot on finish option
 # -----------------------------------------------------------------------------
 # version 0.10.0 - 2021-04-24 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 # --------------------------
@@ -167,17 +179,17 @@ version="0.10.0 from 2021-04-24"
 ###############################
 
 # Change the variables below to fit your computer/backup
-
 COMPUTER=$(hostname -f)					# name of this computer
 DIRECTORIES="/etc"						# directories to backup (DO NOT ADD VAR_DIR HERE!)
 VAR_DIR="/var"
 WWW_DIR="www"							# Directory holding websites (global) (must reside in VAR_DIR!)
 CLIENTS_DIR="clients"					# Directory holding websites per client (must reside in WWW_DIR!)
 MAIL_DIR="vmail"						# Directory holding mail (must reside in VAR_DIR!)
-DB_USER="root"							# database user
+# DB_host=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_host' | cut -d"'" -f 2)					# database user
+DB_USER=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_user' | cut -d"'" -f 2)					# database user
 DB_PASSWORD=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_password' | cut -d"'" -f 2)				# database password
 EMAIL_FROM="$(hostname)@$(hostname -d)"
-EMAIL_TO="info@example.com"		# mail for the responsible person
+EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
 BZIP2=$(which bzip2)					# name and location of bzip2
 COMPRESS_ARGS="-cjpSPf"		#sparse		# tar arguments P = removed /.
@@ -194,6 +206,10 @@ EXCLUDED=" *.lck *.lock *.pid *.sock
 /var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
 /var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile"			# exclude those dir's and files
+RUN_COMPRESSION_FOR_SECONDS=60			# Maximum consecutive time allowed for a compression
+PAUSE_COMPRESSION_FOR_SECONDS=15		# Time of the pause that while a compression is performed
+SLEEP_AFTER_COMPRESS=5					# Pause after every directory compression
+REBOOT_ON_FINISH=false					# Reboot system after backup
 
 ###################################
 ### End user editable variables ###
@@ -351,7 +367,6 @@ backup () {
 	}
 
 	#PERCENT_OF_USED_DISK="95" # for test
-
 	function check_space {
 		#PERCENT_OF_USED_DISK=$((PERCENT_OF_USED_DISK-1)) # for test
 		PERCENT_OF_USED_DISK=$(df -h $BACKUP_DIR | awk 'NR==2{print $5}' | cut -d% -f 1)
@@ -371,7 +386,7 @@ backup () {
 		fi
 	}
 
-	function db_back {
+	function db_backup {
 		#Replace / with _ in dir name => filename
 		#DIR_NAME=$(echo "$DIRECTORIES" | awk '{gsub("/", "_", $0); print}')
 
@@ -383,15 +398,115 @@ backup () {
 		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases'); do
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
-			$TAR $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE.tar.bz2 -C $TMP_DIR db-$i-$FULL_DATE.sql
+			nice -n 19 $TAR $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE.tar.bz2 -C $TMP_DIR db-$i-$FULL_DATE.sql
 			rm -rf $TMP_DIR/db-$i-$FULL_DATE.sql
 			log "Dump OK. $i database saved OK!"
 		done
 	}
 
+	function compress_dir_with_pause {
+		if [ -z $FULL_BACKUP_FILE ]; then
+			BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+		else
+			BACKUP_FILE=$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+		fi
+
+		rm -f $BACKUP_FILE.part
+		nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR &
+		PID=$!
+		echo "PID is $PID"
+		TOGGLE='Resume'
+
+		function procnumber () {
+			echo $(ps ax | awk -v var=$1 '{if($1==var){printf("%d", $1)}}')
+		}
+
+		while [ "$PID" != "" ]; do
+			if [ "$TOGGLE" = "Pause" ]; then
+				echo "Stopping PID $PID"
+				kill -s STOP $PID
+				sleep "$PAUSE_COMPRESSION_FOR_SECONDS"
+				TOGGLE='Resume'
+			else
+				echo "Resuming PID $PID"
+				kill -s CONT $PID
+				sleep "$RUN_COMPRESSION_FOR_SECONDS"
+				PID=$(procnumber $PID)
+				TOGGLE='Pause'
+			fi
+		done
+
+		mv $BACKUP_FILE.part $BACKUP_FILE
+	}
+
+	function dirs_backup {
+		rm -rf $TMP_DIR/excluded
+		for a in $(echo $EXCLUDED) ; do
+			exfile=$(echo -e $a >> $TMP_DIR/excluded)
+		done
+
+		for i in $(echo $DIRECTORIES) ; do
+			UNDERSCORED_DIR=$(echo $i | awk '{gsub("/", "_", $0); print}')
+			TARGET_DIR=$(echo $i | awk '{print $1}')
+			FULL_BACKUP_FILE=$(ls $BACKUP_DIR | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
+
+			if [ -z $FULL_BACKUP_FILE ]; then
+				# Monthly full backup
+				log "No full backup found for $TARGET_DIR in this month. Full backup now!"
+				echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
+				echo "$TARGET_DIR"
+				NEWER=""
+#				nice -n 19 $TAR $COMPRESS_ARGS $BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
+				compress_dir_with_pause
+				log "Full montly backup of $TARGET_DIR done."
+			else
+				# If there is already a full backup for this month, let's do the incremental backup
+				if [ ! -e $TMP_DIR/full-backup$UNDERSCORED_DIR.lck ]; then
+					log "Starting incremental backup for: $TARGET_DIR"
+					echo "$TARGET_DIR"
+					NEWER="--newer $FULL_DATE"
+#					nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
+					compress_dir_with_pause
+					log "Incremental backup for $TARGET_DIR done."
+				else
+					log "Lock file for $TARGET_DIR full backup exists!"
+				fi
+			fi
+
+			# Clean full backup directory lock file
+			rm -rf $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
+			sleep $SLEEP_AFTER_COMPRESS
+		done
+
+		#Clean temp dir
+		rm -rf $TMP_DIR/excluded
+	}
+
+	function reboot_system {
+		systemctl stop monit
+		systemctl stop gogs
+		systemctl stop seafile
+		systemctl stop cron
+		systemctl stop munin
+		systemctl stop bind9
+		systemctl stop dovecot
+		systemctl stop postfix
+		systemctl stop apache2
+		systemctl stop mysqld
+		systemctl stop certbot.timer
+		systemctl stop clamav-daemon
+		systemctl stop clamav-freshclam
+		systemctl stop spamassassin
+		systemctl stop fail2ban
+
+		shutdown –r now
+		reboot
+	}
+
 	#############
 	### START ###
 	#############
+	START=$(date +%s)
 	rm -f $TMP_DIR/maildata
 	if [ -d $BACKUP_DIR ]; then
 		check_space
@@ -399,46 +514,30 @@ backup () {
 		mkdir -p $BACKUP_DIR
 		log "$(basename $0) - First run: primary dir $BACKUP_DIR created."
 	fi
+
 	check_mdir
 	check_tempdir
-	rm -rf $TMP_DIR/excluded
-	for a in $(echo $EXCLUDED) ; do
-		exfile=$(echo -e $a >> $TMP_DIR/excluded)
-	done
-	db_back
+	db_backup
+	dirs_backup
 
-	for i in $(echo $DIRECTORIES) ; do
-		UNDERSCORED_DIR=$(echo $i | awk '{gsub("/", "_", $0); print}')
-		TARGET_DIR=$(echo $i | awk '{print $1}')
-		FULL_BACKUP_FILE=$(ls $BACKUP_DIR | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
-		if [ -z $FULL_BACKUP_FILE ]; then
-			# Monthly full backup
-			log "No full backup found for $TARGET_DIR in this month. Full backup now!"
-			echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
-			echo "$TARGET_DIR"
-			$TAR $COMPRESS_ARGS $BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
-			log "Full montly backup of $TARGET_DIR done."
-		else
-			# If there is already a full backup for this month, let's do the incremental backup
-			if [ ! -e $TMP_DIR/full-backup$UNDERSCORED_DIR.lck ]; then
-				log "Starting daily backup for: $TARGET_DIR"
-				echo "$TARGET_DIR"
-				NEWER="--newer $FULL_DATE"
-				$TAR $NEWER $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
-				log "Daily backup for $TARGET_DIR done."
-			else
-				log "Lock file for $TARGET_DIR full backup exists!"
-			fi
-		fi
-		# Clean full backup directory lock file
-		rm -rf $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
-	done
-
-	#Clean temp dir
-	rm -rf $TMP_DIR/excluded
 	# End of script
 	log "All backup jobs done. Exiting script!"
-	mail -s "Daily backup of $COMPUTER `date +'%F'`" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+	END=$(date +%s)
+	log "Run time: $((END-START))s"
+
+	MAIL=$(which mail)
+	if [ -n "${MAIL}" ]; then
+		SUBJECT="Backup of $COMPUTER $(date +'%F')"
+# 		MESSAGE="Hello"
+# 		echo "${MESSAGE}" | mail -s "${SUBJECT}" "$EMAIL_FROM" "$EMAIL_TO"
+		${MAIL} -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+	else
+		log "I can't send alert because I can't find mail software!"
+	fi
+
+	if [ "${REBOOT_ON_FINISH}" = "true" ]; then
+		reboot_system
+	fi
 }
 
 restore() {
@@ -631,7 +730,7 @@ restore() {
 	fi
 
 	# Send accumulated maildata an cleanup
-	mail -s "Daily backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+	mail -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
 	rm -rf $TMP_DIR/datestart
 	rm -rf $TMP_DIR/dateend
 	rm -rf $TMP_DIR/excluded
