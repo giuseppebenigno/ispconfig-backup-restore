@@ -61,10 +61,11 @@ DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX
 MAX_PERCENT_OF_USED_SPACE="70"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 BACKUP_DB="yes"							# Backup database?
-BACKUP_DIR="/var/backup-restore/${COMPUTER}"	# where to store the backups
+BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
+BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
 EXCLUDED=" *.lck *.lock *.pid *.sock
 /dev /lib/init/rw /media /proc /srv /sys /tmp
-/var/adm /var/amavis /var/backup-restore /var/cache /var/crash
+/var/adm /var/amavis $BACKUP_ROOT_DIR /var/cache /var/crash
 /var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
 /var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files

@@ -2,6 +2,7 @@
 
 ## version 0.16.1 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Critical Fix: Added /var/backup-restore to excluded paths to prevent recursion loop
+- Refactored: Split BACKUP_DIR into BACKUP_ROOT_DIR and BACKUP_DIR to ensure the root backup path is always excluded automatically
 
 ## version 0.16.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Changed compression: uses 'pigz' if available (fast, multicore) or fallback to 'gzip'
