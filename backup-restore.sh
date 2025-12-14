@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.14.1"
+version="0.15.0"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -60,6 +60,13 @@ EXCLUDED=" *.lck *.lock *.pid *.sock
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
 /var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files
 REBOOT_ON_FINISH=false				# Reboot system after backup
+
+# Services to stop before reboot (space separated list or array)
+SERVICES_TO_STOP=(
+	monit gogs seafile cron munin bind9 dovecot postfix
+	apache2 mysqld certbot.timer clamav-daemon
+	clamav-freshclam spamassassin fail2ban
+)
 
 ###################################
 ### End user editable variables ###
@@ -319,21 +326,13 @@ backup () {
 	}
 
 	function reboot_system {
-		systemctl stop monit
-		systemctl stop gogs
-		systemctl stop seafile
-		systemctl stop cron
-		systemctl stop munin
-		systemctl stop bind9
-		systemctl stop dovecot
-		systemctl stop postfix
-		systemctl stop apache2
-		systemctl stop mysqld
-		systemctl stop certbot.timer
-		systemctl stop clamav-daemon
-		systemctl stop clamav-freshclam
-		systemctl stop spamassassin
-		systemctl stop fail2ban
+		log "Stopping services before reboot..."
+		for service in "${SERVICES_TO_STOP[@]}"; do
+			if systemctl is-active --quiet "$service"; then
+				systemctl stop "$service"
+				log "Service $service stopped."
+			fi
+		done
 
 		shutdown –r now
 		reboot

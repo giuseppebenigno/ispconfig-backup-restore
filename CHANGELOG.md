@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.15.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Made list of services to stop before reboot configurable (SERVICES_TO_STOP array)
+- Added check for active services before stopping them (`systemctl is-active`)
+
 ## version 0.14.1 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Code style: Fixed indentation in backup loop logic
 
