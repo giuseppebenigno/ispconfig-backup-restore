@@ -64,7 +64,7 @@ BACKUP_DB="yes"							# Backup database?
 BACKUP_DIR="/var/backup-restore/${COMPUTER}"	# where to store the backups
 EXCLUDED=" *.lck *.lock *.pid *.sock
 /dev /lib/init/rw /media /proc /srv /sys /tmp
-/var/adm /var/amavis $BACKUP_DIR /var/backup-restore /var/cache /var/crash
+/var/adm /var/amavis /var/backup-restore /var/cache /var/crash
 /var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
 /var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files
