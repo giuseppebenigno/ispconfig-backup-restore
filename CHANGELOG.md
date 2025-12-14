@@ -1,5 +1,10 @@
 # Changelog
 
+## version 0.16.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Changed compression: uses 'pigz' if available (fast, multicore) or fallback to 'gzip'
+- Changed backup file extension to .tar.gz (was .tar.bz2)
+- Updated restore logic to auto-detect compression format (fully backward compatible with .tar.bz2)
+
 ## version 0.15.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Made list of services to stop before reboot configurable (SERVICES_TO_STOP array)
 - Added check for active services before stopping them (`systemctl is-active`)

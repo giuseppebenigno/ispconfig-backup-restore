@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.15.0"
+version="0.16.0"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -43,9 +43,18 @@ DB_PASSWORD=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$c
 EMAIL_FROM="$(hostname)@$(hostname -d)"
 EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
-BZIP2=$(which bzip2)					# name and location of bzip2
-COMPRESS_ARGS="-cjpSPf"		#sparse		# tar arguments P = removed /.
-EXTRACT_ARGS="-xjpf"					# tar extract arguments P = removed /
+# Check for pigz, fallback to gzip
+if which pigz > /dev/null; then
+	COMPRESSION_TOOL="pigz"
+	COMPRESSION_EXT=".tar.gz"
+	COMPRESS_ARGS="-cpSP -I pigz -f"
+else
+	COMPRESSION_TOOL="gzip"
+	COMPRESSION_EXT=".tar.gz"
+	COMPRESS_ARGS="-czpSPf"
+fi
+
+EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
 mkdir -p $TMP_DIR
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
@@ -261,7 +270,7 @@ backup () {
 		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases'); do
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
-			nice -n 19 $TAR $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE.tar.bz2 -C $TMP_DIR db-$i-$FULL_DATE.sql
+			nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
 			rm -rf $TMP_DIR/db-$i-$FULL_DATE.sql
 			log "Dump OK. $i database saved OK!"
 		done
@@ -284,7 +293,7 @@ backup () {
 				echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
 				echo "$TARGET_DIR"
 				NEWER=""
-				BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+				BACKUP_FILE="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 				rm -f $BACKUP_FILE.part
 
 				if [ ! -f $BACKUP_FILE ]; then
@@ -301,7 +310,7 @@ backup () {
 					log "Starting incremental backup for: $TARGET_DIR"
 					echo "$TARGET_DIR"
 					NEWER="--newer $FULL_DATE"
-					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2"
+					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 					rm -f "$BACKUP_FILE.part"
 
 					if [ ! -f $BACKUP_FILE ]; then
@@ -545,7 +554,7 @@ restore() {
 				for i in $arh; do
 					rdb=$(echo $i | cut -d "-" -f2)
 					mysql --user="$DB_USER" --password="$DB_PASSWORD" --execute "CREATE DATABASE IF NOT EXISTS $rdb;"
-					$BZIP2 -dc $BACKUP_DIR/$YDATE-$MONTH_DATE/$i | $TAR -xvO | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database=$rdb
+					$TAR -xOf "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
 				done
 				echo -en "All restore jobs done!\nDatabase $2 restored to date $3!\n"
 			fi
