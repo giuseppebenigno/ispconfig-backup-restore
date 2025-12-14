@@ -1,5 +1,8 @@
 # Changelog
 
+## version 0.14.1 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Code style: Fixed indentation in backup loop logic
+
 ## version 0.14.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Simplified resource limiting logic: removed manual pause/resume via signals
 - Replaced custom limiting with standard 'ionice -c3' (Idle) and 'nice -n 19'

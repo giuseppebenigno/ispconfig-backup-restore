@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.14.0"
+version="0.14.1"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -260,8 +260,6 @@ backup () {
 		done
 	}
 
-
-
 	function dirs_backup {
 		rm -rf $TMP_DIR/excluded
 		for a in $(echo $EXCLUDED) ; do
@@ -282,41 +280,41 @@ backup () {
 				BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
 				rm -f $BACKUP_FILE.part
 
-			if [ ! -f $BACKUP_FILE ]; then
-				if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
-					mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-					log "Full montly backup of $TARGET_DIR done."
-				else
-					log "Error backing up $TARGET_DIR"
-				fi
-			fi
-		else
-			# If there is already a full backup for this month, let's do the incremental backup
-			if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
-				log "Starting incremental backup for: $TARGET_DIR"
-				echo "$TARGET_DIR"
-				NEWER="--newer $FULL_DATE"
-				BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2"
-				rm -f "$BACKUP_FILE.part"
-
 				if [ ! -f $BACKUP_FILE ]; then
 					if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-						log "Incremental backup for $TARGET_DIR done."
+						log "Full montly backup of $TARGET_DIR done."
 					else
 						log "Error backing up $TARGET_DIR"
 					fi
 				fi
 			else
-				log "Lock file for $TARGET_DIR full backup exists!"
+				# If there is already a full backup for this month, let's do the incremental backup
+				if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
+					log "Starting incremental backup for: $TARGET_DIR"
+					echo "$TARGET_DIR"
+					NEWER="--newer $FULL_DATE"
+					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2"
+					rm -f "$BACKUP_FILE.part"
+
+					if [ ! -f $BACKUP_FILE ]; then
+						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+							log "Incremental backup for $TARGET_DIR done."
+						else
+							log "Error backing up $TARGET_DIR"
+						fi
+					fi
+				else
+					log "Lock file for $TARGET_DIR full backup exists!"
+				fi
 			fi
-		fi
 
-		# Clean full backup directory lock file
-		rm -rf "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck"
-	done
+			# Clean full backup directory lock file
+			rm -rf "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck"
+		done
 
-		#Clean temp dir
+		# Clean temp dir
 		rm -rf $TMP_DIR/excluded
 	}
 
