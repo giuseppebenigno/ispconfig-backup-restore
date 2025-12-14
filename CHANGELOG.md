@@ -1,5 +1,10 @@
 # Changelog
 
+## version 0.13.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Refactored directory iteration logic to use native Bash globbing instead of ls parsing
+- Improved robustness for filenames with spaces
+- Removed redundant checks for "." and ".."
+
 ## version 0.12.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - If backup file exists, go to backup next file
 - Added BACKUP_DB variable

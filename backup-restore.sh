@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.12.0"
+version="0.13.0"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -25,8 +25,6 @@ version="0.12.0"
 # all copies of the script.
 
 # DESCRIPTION: see README.md
-
-
 
 ###############################
 ### Begin variables section ###
@@ -74,45 +72,51 @@ REBOOT_ON_FINISH=false				# Reboot system after backup
 # You should NOT have to change anything below here     #
 #########################################################
 
+# Enable globbing for hidden files (dotglob) and handle empty matches (nullglob)
+shopt -s dotglob nullglob
+
 # Add /var excluding subdirectories /var/www and /var/vmail to DIRECTORIES
-if [[ -d $VAR_DIR ]]; then
-	for i in $(ls -a $VAR_DIR); do
-		if [[ "$i" != "." && "$i" != ".." && "$i" != $WWW_DIR && "$i" != $MAIL_DIR ]]; then
-			DIRECTORIES=$DIRECTORIES" "$VAR_DIR"/"$i
+if [[ -d "$VAR_DIR" ]]; then
+	for path in "$VAR_DIR"/*; do
+		i=$(basename "$path")
+		if [[ "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
+			DIRECTORIES="$DIRECTORIES $path"
 		fi
 	done
 fi
 
 # Add /var/www excluding subdirectories of /var/www/clients and all subdirectories of /var/www/clients to DIRECTORIES
-if [[ -d $VAR_DIR"/"$WWW_DIR ]]; then
-	for i in $(ls -a $VAR_DIR/$WWW_DIR); do
-		if [[ "$i" != "." && "$i" != ".." && "$i" != "$CLIENTS_DIR" ]]; then
-			DIRECTORIES=$DIRECTORIES" "$VAR_DIR"/"$WWW_DIR"/"$i
+if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
+	for path in "$VAR_DIR/$WWW_DIR"/*; do
+		i=$(basename "$path")
+		if [[ "$i" != "$CLIENTS_DIR" ]]; then
+			DIRECTORIES="$DIRECTORIES $path"
 		fi
 	done
-	for i in $(ls -a $VAR_DIR/$WWW_DIR/$CLIENTS_DIR); do
-		if [[ "$i" != "." && "$i" != ".." ]]; then
-			if [[ -d $VAR_DIR"/"$WWW_DIR"/"$CLIENTS_DIR"/"$i ]]; then
-				for j in $(ls -a $VAR_DIR/$WWW_DIR/$CLIENTS_DIR/$i); do
-					if [[ "$j" != "." && "$j" != ".." ]]; then
-						DIRECTORIES=$DIRECTORIES" "$VAR_DIR"/"$WWW_DIR"/"$CLIENTS_DIR"/"$i"/"$j
-					fi
+
+	if [[ -d "$VAR_DIR/$WWW_DIR/$CLIENTS_DIR" ]]; then
+		for client_path in "$VAR_DIR/$WWW_DIR/$CLIENTS_DIR"/*; do
+			# If it's a directory, add its children (websites)
+			if [[ -d "$client_path" ]]; then
+				for web_path in "$client_path"/*; do
+					DIRECTORIES="$DIRECTORIES $web_path"
 				done
 			else
-				DIRECTORIES=$DIRECTORIES" "$VAR_DIR"/"$WWW_DIR"/"$CLIENTS_DIR"/"$i
+				# If it's a file, adds it directly
+				DIRECTORIES="$DIRECTORIES $client_path"
 			fi
-		fi
-	done
+		done
+	fi
 fi
 
 # Add all subdirectories of MAIL_DIR to DIRECTORIES
-if [[ -d $VAR_DIR"/"$MAIL_DIR ]]; then
-	for i in $(ls -a $VAR_DIR/$MAIL_DIR); do
-		if [[ "$i" != "." && "$i" != ".." ]]; then
-			DIRECTORIES=$DIRECTORIES" "$VAR_DIR"/"$MAIL_DIR"/"$i
-		fi
+if [[ -d "$VAR_DIR/$MAIL_DIR" ]]; then
+	for path in "$VAR_DIR/$MAIL_DIR"/*; do
+		DIRECTORIES="$DIRECTORIES $path"
 	done
 fi
+
+shopt -u dotglob nullglob
 
 me=$(basename $0)
 headline="
