@@ -1,5 +1,10 @@
 # Changelog
 
+## version 0.16.4 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Added `backup-restore-zstd.sh`: new script using zstd compression and parallel processing (80% of cores)
+- Refactor: Moved usage/help text to a dedicated function in both scripts for cleaner code
+- Added `-h`/`--help` and `-v`/`--version` flags to both scripts
+
 ## version 0.16.3 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Improved Logging: Added detailed storage stats (Full vs Incremental/DB sizes), execution duration, and available disk space to the final log/email report
 - Fix: Excluded 'information_schema' and 'performance_schema' from database backups to prevent 'Access denied' errors

@@ -1,9 +1,9 @@
 #! /bin/bash
-version="0.16.4"
+version="0.16.4-zstd"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
-# 
+#
 # DESCRIPTION: see README.md
 
 ###############################
@@ -23,16 +23,18 @@ DB_PASSWORD=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$c
 EMAIL_FROM="$(hostname)@$(hostname -d)"
 EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
-# Check for pigz, fallback to gzip
-if which pigz > /dev/null; then
-	COMPRESSION_TOOL="pigz"
-	COMPRESSION_EXT=".tar.gz"
-	COMPRESS_ARGS="-cpSP -I pigz -f"
-else
-	COMPRESSION_TOOL="gzip"
-	COMPRESSION_EXT=".tar.gz"
-	COMPRESS_ARGS="-czpSPf"
-fi
+
+# --- ZSTD CONFIGURATION START ---
+# Calculate threads: 4/5 of available cores
+TOTAL_CORES=$(nproc)
+THREADS=$(( TOTAL_CORES * 4 / 5 ))
+if [ "$THREADS" -lt 1 ]; then THREADS=1; fi
+
+COMPRESSION_TOOL="zstd"
+COMPRESSION_EXT=".tar.zst"
+# We use an array for arguments to handle spaces correctly in -I
+COMPRESS_ARGS=(-cpSP -I "zstd -T$THREADS" -f)
+# --- ZSTD CONFIGURATION END ---
 
 EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
@@ -114,7 +116,7 @@ shopt -u dotglob nullglob
 
 me=$(basename $0)
 headline="
----------------------=== The back-res script by go0ogl3 ===---------------------
+---------------------=== The backup-restore-zstd script by giuseppe.benigno@gmail.com ===---------------------
 "
 print_usage() {
 	echo "$headline"
@@ -255,7 +257,8 @@ backup () {
 		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
-			nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
+			# Modified to use array for arguments
+			nice -n 19 $TAR "${COMPRESS_ARGS[@]}" "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
 			rm -rf $TMP_DIR/db-$i-$FULL_DATE.sql
 			log "Dump OK. $i database saved OK!"
 		done
@@ -282,7 +285,8 @@ backup () {
 				rm -f $BACKUP_FILE.part
 
 				if [ ! -f $BACKUP_FILE ]; then
-					if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+					# Modified to use array for arguments
+					if ionice -c3 nice -n 19 $TAR $NEWER "${COMPRESS_ARGS[@]}" "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
 						log "Full montly backup of $TARGET_DIR done."
 					else
@@ -299,7 +303,8 @@ backup () {
 					rm -f "$BACKUP_FILE.part"
 
 					if [ ! -f $BACKUP_FILE ]; then
-						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+						# Modified to use array for arguments
+						if ionice -c3 nice -n 19 $TAR $NEWER "${COMPRESS_ARGS[@]}" "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
 							log "Incremental backup for $TARGET_DIR done."
 						else
@@ -431,6 +436,7 @@ restore() {
 	# poor date input verification: ${#RDATE} is 10 for a correct date 2009-01-30
 	# find the first possible restore date=day
 	year=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 2)
+
 	md=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 3)
 	day=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 4 | cut -d "." -f 1)
 	resdate=$year$md$day
