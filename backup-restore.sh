@@ -1,86 +1,9 @@
 #! /bin/bash
-version="0.11.0 from 2021-07-12"
+version="0.12.0"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
-# CHANGELOG:
-# -----------------------------------------------------------------------------
-# version 0.11.0 - 2021-07-12 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
-# --------------------------
-# - Get DB user from ISPC config file
-# - Added pause after every directory compression
-# - Use ".part" suffix for directory backup temporary files
-#   If the process is interrupted you will know which file is incomplete
-# - Added a maximum time for directory compression to run
-# - Added a time for intervals within a compression
-# - Added total running time of backup in log file
-# - Added nice 19 to all commands
-# - Added reboot on finish option
-# -----------------------------------------------------------------------------
-# version 0.10.0 - 2021-04-24 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
-# --------------------------
-# - Changed mysql import command for import stored functions too
-# - Changed variable names for more readability
-# - Change compress command line for compatibility with tar new version
-# - Change the day of full backup. Now the full backup will be performed whenever there is no one for the current month
-# - Change Log file name in $BACKUP_DIR/log/backup-$FULL_DATE.log
-# -----------------------------------------------------------------------------
-# version 0.9.6 - 2014-02-04 (by Yavuz Aydin - Vrij Media)
-# --------------------------
-# - Changed mysql import routine to create database if it doesn't exist
-# - Changed code to import database
-# -----------------------------------------------------------------------------
-# version 0.9.5 - 2014-01-25 (by Yavuz Aydin - Vrij Media)
-# --------------------------
-# - Removed /var from DIRECTORIES
-# - Added code to add all subdirectories of /var excluding /var/www and
-#   /var/vmail to DIRECTORIES
-# - Added code to add /var/www excluding subdirectories of /var/www/clients,
-#   all subdirectories of /var/www/clients and all subdirectories of /var/vmail
-#   to DIRECTORIES
-# - Changed variable COMPUTER to take computername from hostname -f
-# -----------------------------------------------------------------------------
-# version 0.9.4 - 2010-09-13
-# --------------------------
-# Small fix: - Corrected small bug replaced tar with $TAR in the recovery line
-#	of the databases. (The line: mysql -u$DB_USER -p$DB_PASSWORD $rdb <)
-#	Thanks goes to Nimarda and colo.
-# -----------------------------------------------------------------------------
-# version 0.9.3 - 2010-08-01
-# --------------------------
-# Small fix: - Modified del_old_files function to remove "/" from the $to_del
-#	variable used to delete old files
-#	 - Removed from del_old_files function the section used to keep old
-#	databases (It's not working if there is no space left on device). Added
-#	in TODO section
-# -----------------------------------------------------------------------------
-# version 0.9.2 - 2010-04-18
-# --------------------------
-# Always download the latest version here: http://www.eurosistems.ro/back-res
-# Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
-#
-# Fixes: - First run now does not gives errors (Thanks nokia80, Snake12,
-#	rudolfpietersma, HyperAtom, jmp51483, bseibenick, dipeshmehta, andypl
-#	and all others)
-#	 - Modified the log function to accept first time dir createin
-#	 - Modified the starting sequence to not check the free space if the
-#	primary backup directory does not exist
-#	 - If primary backup dir does not exist now it's created at the start
-#	 - Added a line to remove the maildata at the start if the user stops
-#	the script before finishing his jobs. This prevents the script to send
-#	incorect mails.
-#	 - Added link http://www.howtoforge.com/forums/showthread.php?t=41609
-#	maybe some of the downloaders will visit the forum.
-#	 - Added first TODO
-# -----------------------------------------------------------------------------
-# beta version 0.9.1 - first public release last modified 2009-12-06
-# moved to http://www.eurosistems.ro/back-res.0.9.1
-# -----------------------------------------------------------------------------
-# TODO:
-#	 - Add required files check (tar, bzip2, mail, etc.)
-#	 - Create a better del_old_files function (2010-08-01)
-#	 - If you need anything else I'll be happy to do it in my spare time if
-#	you ask here: http://www.howtoforge.com/forums/showthread.php?t=41609
+# CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) go0ogl3 gabi@eurosistems.ro
 # If you want to reward my work donate a small amount with Paypal (use my mail)
@@ -101,77 +24,8 @@ version="0.11.0 from 2021-07-12"
 # The above copyright notice and this permission notice shall be included in
 # all copies of the script.
 
-# description: A backup and restore script for databases and directories
-#
-# The state of development is "It works for me"!
-# So don't blame me if anything bad will happen to you or to your computer
-# if you use this script.
-# I've done my best to make myself understood if you read on.
-#
-# Detailed Description
-#
-# Full dir, mysql and incremental backup script
-# Full and incremental restore script
-# It's meant to use minimum resources and space and keep a loooong backup.
-# I've tried to make as more checks as possible but I can't beat "smart" users.
-# Weird things can happen if your backup dirs includes the "-" or "_" chars.
-# Those chars are used by this script and files formed by the script.
+# DESCRIPTION: see README.md
 
-### Backup part -=============================
-#
-# Important!!! Make sure your system has a correct date. Suggestion: use ntp.
-# Backup is not meant to be interactive, it's meant to be run daily from cron.
-# That's why the log for backup is kept in logdir $LOG_FILE
-# On the first time of the month a permanet full backup is made.
-# The rest of the time an incremental backup is made, by date.
-# Databases are at full allways and the script makes an automatic repair and
-# optimizes the databases before the backup.
-
-### Warning!!! ###
-# If you set the "DELETE_OLD" variable to "yes" the script will delete the old
-# backups to make room for the new ones. Read on.
-
-### Warning!!! ###
-# All incremental backups and databases for a month will be deleted if space
-# is less than the maximum percent of used space "MAX_PERCENT_OF_USED_SPACE".
-
-# You need to take care to not enter in an endless loop if you set DELETE_OLD="yes"
-# The loop can happen if deleted files form $BACKUP_DIR don't decrease the
-# percent of used space
-# The script check for some dirs and files and it's supposed to be run as root
-# The script is supposed to be run daily from cron at night like
-# 40 3 * * * /usr/local/bin/backup-restore.sh 1>/dev/null 2>/dev/null
-# This scripts verifies and corrects all errors found in ALL mysql databases
-# The script also makes full backups of ALL mysql databases every time it's run
-#
-# Restore part -============================
-
-# Restore is meant to be little interactive, the messages are on standard output
-# Dir's are restored verbose with tar by default.
-# Last minute of the day "$LAST_MINUTE_OF_THE_DAY" is set to 2359 but the backup is started at 03:40
-# so this should be set AFTER the backup has ended! At 23:59 of the backup day
-# we can have many files modified from the 03:40. The not so perfect solution is
-# to backup later in the day (23:00) and hope the backup finishes until 23:59
-# My server is still loaded on the 23:00, so I use 03:40 in cron and LAST_MINUTE_OF_THE_DAY=2359
-# because a full backup last for more than 16 hours for tar.bz2
-# For sure I will loose all files created between 03:40 and 23:59 of that day.
-# To prevent that I can restore files one day AFTER the day I want to restore
-# and use find --newer to delete unwanted files.
-
-# To restore dirs make sure you have the full backup from that month and use:
-# `back-res dir /etc 2009-11-23 /`
-# to restore the "/etc" dir from date 2009-11-23 to root
-# `back-res dir /etc 2009-11-23 /tmp` is used to restore the "/etc" dir to /tmp
-#
-# `back-res dir all 2009-11-23 /`
-# to restore all directories from date 2009-11-23 to root
-
-# To restore databases use:
-# `back-res db mysql 2009-11-23`
-# to restore the "mysql" database from date 2009-11-23 to local mysql server
-#
-# `back-res db all 2009-11-23`
-# to restore all databases from date 2009-11-23 to local mysql server
 
 
 ###############################
@@ -199,17 +53,18 @@ mkdir -p $TMP_DIR
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
 MAX_PERCENT_OF_USED_SPACE="70"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
+BACKUP_DB="yes"							# Backup database?
 BACKUP_DIR="/var/backup-restore/${COMPUTER}"	# where to store the backups
 EXCLUDED=" *.lck *.lock *.pid *.sock
 /dev /lib/init/rw /media /proc /srv /sys /tmp
 /var/adm /var/amavis $BACKUP_DIR /var/cache /var/crash
 /var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
-/var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile"			# exclude those dir's and files
-RUN_COMPRESSION_FOR_SECONDS=60			# Maximum consecutive time allowed for a compression
-PAUSE_COMPRESSION_FOR_SECONDS=15		# Time of the pause that while a compression is performed
-SLEEP_AFTER_COMPRESS=5					# Pause after every directory compression
-REBOOT_ON_FINISH=false					# Reboot system after backup
+/var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files
+RUN_COMPRESSION_FOR_SECONDS=30			# Maximum consecutive time allowed for a compression
+PAUSE_COMPRESSION_FOR_SECONDS=15		# Time of the pause that while a compression is performed, set to 0 for direct compression without pause
+SLEEP_AFTER_COMPRESS=20				# Pause after every directory compression
+REBOOT_ON_FINISH=false				# Reboot system after backup
 
 ###################################
 ### End user editable variables ###
@@ -405,38 +260,31 @@ backup () {
 	}
 
 	function compress_dir_with_pause {
-		if [ -z $FULL_BACKUP_FILE ]; then
-			BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
-		else
-			BACKUP_FILE=$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+		if [ ! -f $BACKUP_FILE ]; then
+			nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR &
+			PID=$!
+			echo "PID is $PID"
+			TOGGLE='Resume'
+
+			function procnumber () {
+				echo $(ps ax | awk -v var=$1 '{if($1==var){printf("%d", $1)}}')
+			}
+
+			while [ "$PID" != "" ]; do
+				if [ "$TOGGLE" = "Pause" ]; then
+					echo "Stopping PID $PID"
+					kill -s STOP $PID
+					sleep "$PAUSE_COMPRESSION_FOR_SECONDS"
+					TOGGLE='Resume'
+				else
+					echo "Resuming PID $PID"
+					kill -s CONT $PID
+					sleep "$RUN_COMPRESSION_FOR_SECONDS"
+					PID=$(procnumber $PID)
+					TOGGLE='Pause'
+				fi
+			done
 		fi
-
-		rm -f $BACKUP_FILE.part
-		nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR &
-		PID=$!
-		echo "PID is $PID"
-		TOGGLE='Resume'
-
-		function procnumber () {
-			echo $(ps ax | awk -v var=$1 '{if($1==var){printf("%d", $1)}}')
-		}
-
-		while [ "$PID" != "" ]; do
-			if [ "$TOGGLE" = "Pause" ]; then
-				echo "Stopping PID $PID"
-				kill -s STOP $PID
-				sleep "$PAUSE_COMPRESSION_FOR_SECONDS"
-				TOGGLE='Resume'
-			else
-				echo "Resuming PID $PID"
-				kill -s CONT $PID
-				sleep "$RUN_COMPRESSION_FOR_SECONDS"
-				PID=$(procnumber $PID)
-				TOGGLE='Pause'
-			fi
-		done
-
-		mv $BACKUP_FILE.part $BACKUP_FILE
 	}
 
 	function dirs_backup {
@@ -456,18 +304,36 @@ backup () {
 				echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
 				echo "$TARGET_DIR"
 				NEWER=""
-#				nice -n 19 $TAR $COMPRESS_ARGS $BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
-				compress_dir_with_pause
-				log "Full montly backup of $TARGET_DIR done."
+				BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+				rm -f $BACKUP_FILE.part
+
+				if [ ! -f $BACKUP_FILE ]; then
+					if [ "$PAUSE_COMPRESSION_FOR_SECONDS" -eq 0 ]; then
+						nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR
+					else
+						compress_dir_with_pause
+					fi
+					mv $BACKUP_FILE.part $BACKUP_FILE
+					log "Full montly backup of $TARGET_DIR done."
+				fi
 			else
 				# If there is already a full backup for this month, let's do the incremental backup
 				if [ ! -e $TMP_DIR/full-backup$UNDERSCORED_DIR.lck ]; then
 					log "Starting incremental backup for: $TARGET_DIR"
 					echo "$TARGET_DIR"
 					NEWER="--newer $FULL_DATE"
-#					nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2 -X $TMP_DIR/excluded $TARGET_DIR
-					compress_dir_with_pause
-					log "Incremental backup for $TARGET_DIR done."
+					BACKUP_FILE=$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
+					rm -f $BACKUP_FILE.part
+
+					if [ ! -f $BACKUP_FILE ]; then
+						if [ "$PAUSE_COMPRESSION_FOR_SECONDS" -eq 0 ]; then
+							nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR
+						else
+							compress_dir_with_pause
+						fi
+						mv $BACKUP_FILE.part $BACKUP_FILE
+						log "Incremental backup for $TARGET_DIR done."
+					fi
 				else
 					log "Lock file for $TARGET_DIR full backup exists!"
 				fi
@@ -517,7 +383,7 @@ backup () {
 
 	check_mdir
 	check_tempdir
-	db_backup
+	[ x"${BACKUP_DB}" == "xyes" ] && db_backup
 	dirs_backup
 
 	# End of script
