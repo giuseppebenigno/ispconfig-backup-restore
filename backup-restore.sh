@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.13.0"
+version="0.14.0"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -59,9 +59,6 @@ EXCLUDED=" *.lck *.lock *.pid *.sock
 /var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
 /var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
 /var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files
-RUN_COMPRESSION_FOR_SECONDS=30			# Maximum consecutive time allowed for a compression
-PAUSE_COMPRESSION_FOR_SECONDS=15		# Time of the pause that while a compression is performed, set to 0 for direct compression without pause
-SLEEP_AFTER_COMPRESS=20				# Pause after every directory compression
 REBOOT_ON_FINISH=false				# Reboot system after backup
 
 ###################################
@@ -263,33 +260,7 @@ backup () {
 		done
 	}
 
-	function compress_dir_with_pause {
-		if [ ! -f $BACKUP_FILE ]; then
-			nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR &
-			PID=$!
-			echo "PID is $PID"
-			TOGGLE='Resume'
 
-			function procnumber () {
-				echo $(ps ax | awk -v var=$1 '{if($1==var){printf("%d", $1)}}')
-			}
-
-			while [ "$PID" != "" ]; do
-				if [ "$TOGGLE" = "Pause" ]; then
-					echo "Stopping PID $PID"
-					kill -s STOP $PID
-					sleep "$PAUSE_COMPRESSION_FOR_SECONDS"
-					TOGGLE='Resume'
-				else
-					echo "Resuming PID $PID"
-					kill -s CONT $PID
-					sleep "$RUN_COMPRESSION_FOR_SECONDS"
-					PID=$(procnumber $PID)
-					TOGGLE='Pause'
-				fi
-			done
-		fi
-	}
 
 	function dirs_backup {
 		rm -rf $TMP_DIR/excluded
@@ -311,42 +282,39 @@ backup () {
 				BACKUP_FILE=$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
 				rm -f $BACKUP_FILE.part
 
-				if [ ! -f $BACKUP_FILE ]; then
-					if [ "$PAUSE_COMPRESSION_FOR_SECONDS" -eq 0 ]; then
-						nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR
-					else
-						compress_dir_with_pause
-					fi
-					mv $BACKUP_FILE.part $BACKUP_FILE
+			if [ ! -f $BACKUP_FILE ]; then
+				if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+					mv "$BACKUP_FILE.part" "$BACKUP_FILE"
 					log "Full montly backup of $TARGET_DIR done."
-				fi
-			else
-				# If there is already a full backup for this month, let's do the incremental backup
-				if [ ! -e $TMP_DIR/full-backup$UNDERSCORED_DIR.lck ]; then
-					log "Starting incremental backup for: $TARGET_DIR"
-					echo "$TARGET_DIR"
-					NEWER="--newer $FULL_DATE"
-					BACKUP_FILE=$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2
-					rm -f $BACKUP_FILE.part
-
-					if [ ! -f $BACKUP_FILE ]; then
-						if [ "$PAUSE_COMPRESSION_FOR_SECONDS" -eq 0 ]; then
-							nice -n 19 $TAR $NEWER $COMPRESS_ARGS $BACKUP_FILE.part -X $TMP_DIR/excluded $TARGET_DIR
-						else
-							compress_dir_with_pause
-						fi
-						mv $BACKUP_FILE.part $BACKUP_FILE
-						log "Incremental backup for $TARGET_DIR done."
-					fi
 				else
-					log "Lock file for $TARGET_DIR full backup exists!"
+					log "Error backing up $TARGET_DIR"
 				fi
 			fi
+		else
+			# If there is already a full backup for this month, let's do the incremental backup
+			if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
+				log "Starting incremental backup for: $TARGET_DIR"
+				echo "$TARGET_DIR"
+				NEWER="--newer $FULL_DATE"
+				BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE.tar.bz2"
+				rm -f "$BACKUP_FILE.part"
 
-			# Clean full backup directory lock file
-			rm -rf $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
-			sleep $SLEEP_AFTER_COMPRESS
-		done
+				if [ ! -f $BACKUP_FILE ]; then
+					if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+						log "Incremental backup for $TARGET_DIR done."
+					else
+						log "Error backing up $TARGET_DIR"
+					fi
+				fi
+			else
+				log "Lock file for $TARGET_DIR full backup exists!"
+			fi
+		fi
+
+		# Clean full backup directory lock file
+		rm -rf "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck"
+	done
 
 		#Clean temp dir
 		rm -rf $TMP_DIR/excluded
