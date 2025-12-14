@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.16.1"
+version="0.16.3"
 # Always download the latest version here: http://www.eurosistems.ro/back-res
 # Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
 #
@@ -268,7 +268,7 @@ backup () {
 		log "Starting automatic repair and optimize for all databases..."
 		mysqlcheck -u$DB_USER -p$DB_PASSWORD --all-databases --optimize --auto-repair --silent 2>&1
 		### Starting database dumps
-		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases'); do
+		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
 			nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
@@ -368,7 +368,28 @@ backup () {
 	# End of script
 	log "All backup jobs done. Exiting script!"
 	END=$(date +%s)
-	log "Run time: $((END-START))s"
+	RUN_TIME=$((END-START))
+	# Convert seconds to HH:MM:SS
+	FORMATTED_TIME=$(date -u -d @"${RUN_TIME}" +'%H:%M:%S')
+	log "Run time: ${FORMATTED_TIME} (${RUN_TIME}s)"
+	
+	# Calculate sizes
+	FULL_SIZE="0"
+	# We use 2>/dev/null to hide error if no files match
+	FULL_CHECK=$(du -ch "$BACKUP_DIR"/full*-$MONTH_DATE* 2>/dev/null | tail -n1 | awk '{print $1}')
+	if [ -n "$FULL_CHECK" ]; then
+		FULL_SIZE=$FULL_CHECK
+	fi
+
+	INCR_SIZE="0"
+	if [ -d "$BACKUP_DIR/$MONTH_DATE" ]; then
+		INCR_SIZE=$(du -sh "$BACKUP_DIR/$MONTH_DATE" | awk '{print $1}')
+	fi
+
+	# Get available space on the partition hosting BACKUP_ROOT_DIR
+	AVAIL_SPACE=$(df -hP "$BACKUP_ROOT_DIR" | awk 'NR==2 {print $4}')
+	
+	log "Stats for $MONTH_DATE | Full: $FULL_SIZE | Incr/DB: $INCR_SIZE | Free: $AVAIL_SPACE"
 
 	MAIL=$(which mail)
 	if [ -n "${MAIL}" ]; then

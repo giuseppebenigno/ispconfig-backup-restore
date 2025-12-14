@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.16.3 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Improved Logging: Added detailed storage stats (Full vs Incremental/DB sizes), execution duration, and available disk space to the final log/email report
+- Fix: Excluded 'information_schema' and 'performance_schema' from database backups to prevent 'Access denied' errors
+
 ## version 0.16.1 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Critical Fix: Added /var/backup-restore to excluded paths to prevent recursion loop
 - Refactored: Split BACKUP_DIR into BACKUP_ROOT_DIR and BACKUP_DIR to ensure the root backup path is always excluded automatically
