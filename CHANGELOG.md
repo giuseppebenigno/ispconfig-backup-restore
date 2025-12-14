@@ -4,6 +4,7 @@
 - If backup file exists, go to backup next file
 - Added BACKUP_DB variable
 - Moved CHANGELOG and documentation to separate files (CHANGELOG.md, README.md)
+- Renamed script from back-res.sh to backup-restore.sh
 
 ## version 0.11.0 - 2021-07-12 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Get DB user from ISPC config file
