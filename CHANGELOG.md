@@ -1,5 +1,8 @@
 # Changelog
 
+## version 0.16.1 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Critical Fix: Added /var/backup-restore to excluded paths to prevent recursion loop
+
 ## version 0.16.0 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Changed compression: uses 'pigz' if available (fast, multicore) or fallback to 'gzip'
 - Changed backup file extension to .tar.gz (was .tar.bz2)
