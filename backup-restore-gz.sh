@@ -1,5 +1,5 @@
 #! /bin/bash
-version="0.16.4"
+version="0.17.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -38,7 +38,7 @@ EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
 mkdir -p $TMP_DIR
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
-MAX_PERCENT_OF_USED_SPACE="70"			# Max percent of used space before start of delete
+MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 BACKUP_DB="yes"							# Backup database?
 BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups

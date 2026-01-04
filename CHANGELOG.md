@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.17.0 - 2026-01-04 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Renamed original script to `backup-restore-gz.sh` to reflect that it only uses gz/pigz compression (bzip2 removed)
+- Updated `MAX_PERCENT_OF_USED_SPACE` threshold for backup maintenance
+
 ## version 0.16.4 - 2025-12-14 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Added `backup-restore-zstd.sh`: new script using zstd compression and parallel processing (80% of cores)
 - Refactor: Moved usage/help text to a dedicated function in both scripts for cleaner code
