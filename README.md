@@ -62,19 +62,19 @@ To prevent that I can restore files one day AFTER the day I want to restore and 
 To restore dirs make sure you have the full backup from that month and use:
 
 ```bash
-back-res dir /etc 2009-11-23 /
+backup-restore-gz.sh dir /etc 2009-11-23 /
 ```
 
 to restore the `/etc` dir from date 2009-11-23 to root.
 
 ```bash
-back-res dir /etc 2009-11-23 /tmp
+backup-restore-gz.sh dir /etc 2009-11-23 /tmp
 ```
 
 is used to restore the `/etc` dir to `/tmp`.
 
 ```bash
-back-res dir all 2009-11-23 /
+backup-restore-gz.sh dir all 2009-11-23 /
 ```
 
 to restore all directories from date 2009-11-23 to root.
@@ -84,13 +84,13 @@ to restore all directories from date 2009-11-23 to root.
 To restore databases use:
 
 ```bash
-back-res db mysql 2009-11-23
+backup-restore-gz.sh db mysql 2009-11-23
 ```
 
 to restore the `mysql` database from date 2009-11-23 to local mysql server.
 
 ```bash
-back-res db all 2009-11-23
+backup-restore-gz.sh db all 2009-11-23
 ```
 
 to restore all databases from date 2009-11-23 to local mysql server.

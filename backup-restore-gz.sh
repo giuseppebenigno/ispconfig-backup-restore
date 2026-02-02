@@ -1,5 +1,6 @@
 #! /bin/bash
-version="0.17.0"
+set -o pipefail
+version="0.18.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -34,9 +35,16 @@ else
 	COMPRESS_ARGS="-czpSPf"
 fi
 
+# --- SPLIT CONFIGURATION ---
+# If set, backup files will be split into parts of this size.
+# Example: SPLIT_SIZE="1G" or SPLIT_SIZE="500M"
+# If empty, no splitting will occur.
+SPLIT_SIZE="1G"
+# --- END SPLIT CONFIGURATION ---
+
 EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
-mkdir -p $TMP_DIR
+mkdir -p "$TMP_DIR"
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
 MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
@@ -114,7 +122,7 @@ shopt -u dotglob nullglob
 
 me=$(basename $0)
 headline="
----------------------=== The back-res script by go0ogl3 ===---------------------
+---------------------=== The backup-restore-gz script by giuseppe.benigno@gmail.com ===---------------------
 "
 print_usage() {
 	echo "$headline"
@@ -255,17 +263,29 @@ backup () {
 		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
-			nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
+			if [ -n "$SPLIT_SIZE" ]; then
+				B_DIR="$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE"
+				mkdir -p "$B_DIR"
+				# Pipe tar to split for gz
+				if nice -n 19 $TAR -czpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
+					log "Dump OK. $i database saved OK! (Split)"
+				else
+					log "Error splitting database backup for $i"
+				fi
+			else
+				nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
+				log "Dump OK. $i database saved OK!"
+			fi
 			rm -rf $TMP_DIR/db-$i-$FULL_DATE.sql
-			log "Dump OK. $i database saved OK!"
 		done
 	}
 
 	function dirs_backup {
-		rm -rf $TMP_DIR/excluded
-		for a in $(echo $EXCLUDED) ; do
-			exfile=$(echo -e $a >> $TMP_DIR/excluded)
-		done
+		rm -rf "$TMP_DIR/excluded"
+		touch "$TMP_DIR/excluded"
+		while IFS= read -r a; do
+			echo -e "$a" >> "$TMP_DIR/excluded"
+		done <<< "$EXCLUDED"
 
 		for i in $(echo $DIRECTORIES) ; do
 			UNDERSCORED_DIR=$(echo $i | awk '{gsub("/", "_", $0); print}')
@@ -278,15 +298,29 @@ backup () {
 				echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
 				echo "$TARGET_DIR"
 				NEWER=""
-				BACKUP_FILE="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-				rm -f $BACKUP_FILE.part
+				if [ -n "$SPLIT_SIZE" ]; then
+					BACKUP_DIR_NAME="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE"
+					if [ ! -d "$BACKUP_DIR_NAME" ]; then
+						rm -rf "$BACKUP_DIR_NAME.part"
+						mkdir -p "$BACKUP_DIR_NAME.part"
+						if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
+							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+							log "Full monthly backup of $TARGET_DIR done (split)."
+						else
+							log "Error backing up $TARGET_DIR (split)"
+						fi
+					fi
+				else
+					BACKUP_FILE="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+					rm -f $BACKUP_FILE.part
 
-				if [ ! -f $BACKUP_FILE ]; then
-					if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
-						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-						log "Full montly backup of $TARGET_DIR done."
-					else
-						log "Error backing up $TARGET_DIR"
+					if [ ! -f $BACKUP_FILE ]; then
+						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+							log "Full monthly backup of $TARGET_DIR done."
+						else
+							log "Error backing up $TARGET_DIR"
+						fi
 					fi
 				fi
 			else
@@ -295,15 +329,29 @@ backup () {
 					log "Starting incremental backup for: $TARGET_DIR"
 					echo "$TARGET_DIR"
 					NEWER="--newer $FULL_DATE"
-					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-					rm -f "$BACKUP_FILE.part"
+					if [ -n "$SPLIT_SIZE" ]; then
+						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE"
+						if [ ! -d "$BACKUP_DIR_NAME" ]; then
+							rm -rf "$BACKUP_DIR_NAME.part"
+							mkdir -p "$BACKUP_DIR_NAME.part"
+							if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
+								mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+								log "Incremental backup for $TARGET_DIR done (split)."
+							else
+								log "Error backing up $TARGET_DIR (split)"
+							fi
+						fi
+					else
+						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+						rm -f "$BACKUP_FILE.part"
 
-					if [ ! -f $BACKUP_FILE ]; then
-						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
-							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-							log "Incremental backup for $TARGET_DIR done."
-						else
-							log "Error backing up $TARGET_DIR"
+						if [ ! -f $BACKUP_FILE ]; then
+							if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
+								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+								log "Incremental backup for $TARGET_DIR done."
+							else
+								log "Error backing up $TARGET_DIR"
+							fi
 						fi
 					fi
 				else
@@ -395,15 +443,16 @@ restore() {
 		# We now need to remove the newer files created after the restored backup date.
 		to_rem=$(find $path/$2 -newer $TMP_DIR/dateend)
 		echo -en "\n$headline\n    For a clean backup restored at $3 we need now to delete the files\ncreated after the backup date.\n    If exists, a list of files to be deleted follows:\n\n"
-			for a in $to_rem; do
-				echo -e "To be removed: $a"
-			done
+		while IFS= read -r a; do
+			echo -e "To be removed: $a"
+		done <<< "$to_rem"
+
 		echo -en "\nPlease input \"yes\" to delete those files, if they exist, and press [ENTER]: "
 		read del
 		if [[ "$del" = "yes" ]]; then
-			for a in $to_rem; do
-				rm -rf $a
-			done
+			while IFS= read -r a; do
+				rm -rf "$a"
+			done <<< "$to_rem"
 			echo -en "All restore jobs done!\nDir $2 restored to date $3!\n"
 			exit
 		fi
@@ -517,19 +566,23 @@ restore() {
 	if [ $type = "dir" ]; then
 		if [[ "$DIRECTORIES all" =~ "$2" ]]; then
 			if [ $dir = "all" ]; then
-				farh=$(find $BACKUP_DIR -maxdepth 1 -type f -newer $TMP_DIR/datestart -a ! -newer $TMP_DIR/dateend | sed 's_.*/__' | grep ^full_)
-				arh=$(find $BACKUP_DIR/$YDATE-$MONTH_DATE -maxdepth 1 -type f -newer $TMP_DIR/datestart -a ! -newer $TMP_DIR/dateend | sed 's_.*/__' | grep -v ^db-)
+				farh=$(find "$BACKUP_DIR" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep ^full_)
+				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep -v ^db-)
 				# echo farh este $farh
 				# echo arh este $arh
 			else
-				farh=$(find $BACKUP_DIR -maxdepth 1 -type f -newer $TMP_DIR/datestart -a ! -newer $TMP_DIR/dateend | sed 's_.*/__' | grep $dir | grep ^full_)
+				farh=$(find "$BACKUP_DIR" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep "$dir" | grep ^full_)
 				# echo farh e $farh
-				arh=$(find $BACKUP_DIR/$YDATE-$MONTH_DATE -maxdepth 1 -type f -newer $TMP_DIR/datestart -a ! -newer $TMP_DIR/dateend | sed 's_.*/__' | grep $dir | grep -v ^db-)
+				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep "$dir" | grep -v ^db-)
 				# echo arh e $arh
 			fi
 			for f in $farh; do
 				echo -en "\tExtracting $f...\n\n"
-				$TAR $EXTRACT_ARGS $BACKUP_DIR/$f -C $path &>/dev/null
+				if [ -d "$BACKUP_DIR/$f" ]; then
+					cat "$BACKUP_DIR/$f"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+				else
+					$TAR $EXTRACT_ARGS "$BACKUP_DIR/$f" -C "$path" &>/dev/null
+				fi
 				# if the day is 01 the the full backup is recovered so we need to clean newer files created after the backup date.
 				if [ $DAY_OF_MONTH = "01" ]; then
 					del_res $path $2 $3 $TMP_DIR
@@ -537,7 +590,11 @@ restore() {
 			done
 			for i in $arh; do
 				echo -en "\tExtracting $i...\n\n"
-				$TAR $EXTRACT_ARGS $BACKUP_DIR/$YDATE-$MONTH_DATE/$i -C $path &>/dev/null
+				if [ -d "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" ]; then
+					cat "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+				else
+					$TAR $EXTRACT_ARGS "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" -C "$path" &>/dev/null
+				fi
 			done
 			del_res $path $2 $3 $TMP_DIR
 		else

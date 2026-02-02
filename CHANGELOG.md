@@ -1,5 +1,8 @@
 # Changelog
 
+## version 0.18.0 - 2026-02-02 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Added support for splitting backup files (SPLIT_SIZE variable)
+
 ## version 0.17.0 - 2026-01-04 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Renamed original script to `backup-restore-gz.sh` to reflect that it only uses gz/pigz compression (bzip2 removed)
 - Updated `MAX_PERCENT_OF_USED_SPACE` threshold for backup maintenance
