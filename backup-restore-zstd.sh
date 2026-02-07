@@ -1,6 +1,6 @@
 #! /bin/bash
 set -o pipefail
-version="0.18.0"
+version="0.18.3"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -80,10 +80,11 @@ SERVICES_TO_STOP=(
 shopt -s dotglob nullglob
 
 # Add /var excluding subdirectories /var/www and /var/vmail to DIRECTORIES
+# Also exclude the BACKUP_ROOT_DIR itself
 if [[ -d "$VAR_DIR" ]]; then
 	for path in "$VAR_DIR"/*; do
 		i=$(basename "$path")
-		if [[ "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
+		if [[ "$path" != "$BACKUP_ROOT_DIR" && "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
 			DIRECTORIES="$DIRECTORIES $path"
 		fi
 	done
@@ -387,6 +388,12 @@ backup () {
 	### START ###
 	#############
 	START=$(date +%s)
+	MAIL=$(which mail)
+	if [ -n "${MAIL}" ]; then
+		SUBJECT="Backup of $COMPUTER STARTED $(date +'%F')"
+		echo "Backup started at $(date '+%Y-%m-%d %H:%M:%S')" | ${MAIL} -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO"
+	fi
+
 	rm -f $TMP_DIR/maildata
 	if [ -d $BACKUP_DIR ]; then
 		check_space
@@ -397,6 +404,7 @@ backup () {
 
 	check_mdir
 	check_tempdir
+	log "Using compression tool: $COMPRESSION_TOOL"
 	[ x"${BACKUP_DB}" == "xyes" ] && db_backup
 	dirs_backup
 
@@ -426,7 +434,6 @@ backup () {
 	
 	log "Stats for $MONTH_DATE | Full: $FULL_SIZE | Incr/DB: $INCR_SIZE | Free: $AVAIL_SPACE"
 
-	MAIL=$(which mail)
 	if [ -n "${MAIL}" ]; then
 		SUBJECT="Backup of $COMPUTER $(date +'%F')"
 # 		MESSAGE="Hello"

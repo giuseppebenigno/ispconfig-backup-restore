@@ -1,5 +1,14 @@
 # Changelog
 
+## version 0.18.3 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Added: Log the compression tool used at the beginning of the backup process.
+
+## version 0.18.2 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Added: Email notification when the backup process starts.
+
+## version 0.18.1 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Fix: Properly exclude `BACKUP_ROOT_DIR` from the directory iteration loop to prevent trying to back up the backup folder itself.
+
 ## version 0.18.0 - 2026-02-02 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Added support for splitting backup files (SPLIT_SIZE variable)
 
