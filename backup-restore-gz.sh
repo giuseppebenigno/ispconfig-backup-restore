@@ -1,6 +1,6 @@
 #! /bin/bash
 set -o pipefail
-version="0.18.3"
+version="0.19.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -159,7 +159,8 @@ backup () {
 	MONTH_DATE=$(date +%Y-%m)					# Date, YYYY-MM, eg. 2009-09
 	DAY_OF_MONTH=$(date +%d)					# Date of the Month, DD, eg. 27
 	FULL_DATE="${MONTH_DATE}-${DAY_OF_MONTH}"	# Full Date, YYYY-MM-DD, year sorted, eg. 2009-11-21
-	LOG_FILE=$BACKUP_DIR/log/backup-$FULL_DATE.log
+	# Log file is now inside the monthly directory
+	LOG_FILE=$BACKUP_DIR/$MONTH_DATE/log/backup-$FULL_DATE.log
 
 	#################
 	### Functions ###
@@ -171,17 +172,17 @@ backup () {
 			echo "$NOW - $(basename $0) - $1" >> $LOG_FILE
 			echo "$NOW - $(basename $0) - $1" >> $TMP_DIR/maildata
 		else
-			if [ ! -d $BACKUP_DIR/log ]; then
-				mkdir -p $BACKUP_DIR/log
+			if [ ! -d $BACKUP_DIR/$MONTH_DATE/log ]; then
+				mkdir -p $BACKUP_DIR/$MONTH_DATE/log
 				if [ -n "$log1" ]; then
 					echo "$log1" >> $LOG_FILE
 					echo "$log1" >> $TMP_DIR/maildata
 				fi
-				echo "$NOW - $(basename $0) - First run: log dir and log file created." >> $LOG_FILE
-				echo "$NOW - $(basename $0) - First run: log dir and log file created." >> $TMP_DIR/maildata
+				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $LOG_FILE
+				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $TMP_DIR/maildata
 			else
-				echo "$NOW - $(basename $0) - First run: log file created." >> $LOG_FILE
-				echo "$NOW - $(basename $0) - First run: log file created." >> $TMP_DIR/maildata
+				echo "$NOW - $(basename $0) - Log file created." >> $LOG_FILE
+				echo "$NOW - $(basename $0) - Log file created." >> $TMP_DIR/maildata
 			fi
 				echo "$NOW - $(basename $0) - $1" >> $LOG_FILE
 				echo "$NOW - $(basename $0) - $1" >> $TMP_DIR/maildata
@@ -189,13 +190,9 @@ backup () {
 	}
 
 	function check_mdir {
-		log "Checking if month dir exist: $BACKUP_DIR/$MONTH_DATE"
-		if [ -d $BACKUP_DIR/$MONTH_DATE ]; then
-			log "Backup dir $BACKUP_DIR/$MONTH_DATE exists"
-		else
-			mkdir $BACKUP_DIR/$MONTH_DATE
-			log "Month dir $BACKUP_DIR/$MONTH_DATE created"
-		fi
+		log "Checking if month dirs exist: $BACKUP_DIR/$MONTH_DATE"
+		mkdir -p $BACKUP_DIR/$MONTH_DATE/{db,files,log}
+		log "Month subdirs (db, files, log) ensured"
 	}
 
 	function check_tempdir {
@@ -209,7 +206,7 @@ backup () {
 	}
 
 	function del_old_files {
-		to_del=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | sed 's/\///g') # sort files in ctime order and select the first modified, except the log dir
+		to_del=$(ls -ctF $BACKUP_DIR | tail -n 1 | sed 's/\///g') # sort files in ctime order and select the first modified
 		#if [ -d "$BACKUP_DIR/$to_del" ]; then
 		#    # recover db backups and store only the ones from de first day of month or from the first full backup of dirs
 		#    # list all db backups in month dir, extract first date
@@ -265,7 +262,7 @@ backup () {
 			log "Starting mysqldump $i"
 			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
 			if [ -n "$SPLIT_SIZE" ]; then
-				B_DIR="$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE"
+				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				mkdir -p "$B_DIR"
 				# Pipe tar to split for gz
 				if nice -n 19 $TAR -czpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
@@ -274,7 +271,7 @@ backup () {
 					log "Error splitting database backup for $i"
 				fi
 			else
-				nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
+				nice -n 19 $TAR $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT" -C $TMP_DIR db-$i-$FULL_DATE.sql
 				log "Dump OK. $i database saved OK!"
 			fi
 			rm -rf $TMP_DIR/db-$i-$FULL_DATE.sql
@@ -291,7 +288,8 @@ backup () {
 		for i in $(echo $DIRECTORIES) ; do
 			UNDERSCORED_DIR=$(echo $i | awk '{gsub("/", "_", $0); print}')
 			TARGET_DIR=$(echo $i | awk '{print $1}')
-			FULL_BACKUP_FILE=$(ls $BACKUP_DIR | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
+			# Check for monthly full backup in the monthly files directory
+			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/files" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
 
 			if [ -z $FULL_BACKUP_FILE ]; then
 				# Monthly full backup
@@ -300,7 +298,7 @@ backup () {
 				echo "$TARGET_DIR"
 				NEWER=""
 				if [ -n "$SPLIT_SIZE" ]; then
-					BACKUP_DIR_NAME="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE"
+					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/files/full$UNDERSCORED_DIR-$FULL_DATE"
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
@@ -312,9 +310,9 @@ backup () {
 						fi
 					fi
 				else
-					BACKUP_FILE="$BACKUP_DIR/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/files/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 					rm -f $BACKUP_FILE.part
-
+ 
 					if [ ! -f $BACKUP_FILE ]; then
 						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
@@ -331,7 +329,7 @@ backup () {
 					echo "$TARGET_DIR"
 					NEWER="--newer $FULL_DATE"
 					if [ -n "$SPLIT_SIZE" ]; then
-						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE"
+						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/files/i$UNDERSCORED_DIR-$FULL_DATE"
 						if [ ! -d "$BACKUP_DIR_NAME" ]; then
 							rm -rf "$BACKUP_DIR_NAME.part"
 							mkdir -p "$BACKUP_DIR_NAME.part"
@@ -343,9 +341,9 @@ backup () {
 							fi
 						fi
 					else
-						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/files/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 						rm -f "$BACKUP_FILE.part"
-
+ 
 						if [ ! -f $BACKUP_FILE ]; then
 							if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
@@ -415,8 +413,8 @@ backup () {
 	
 	# Calculate sizes
 	FULL_SIZE="0"
-	# We use 2>/dev/null to hide error if no files match
-	FULL_CHECK=$(du -ch "$BACKUP_DIR"/full*-$MONTH_DATE* 2>/dev/null | tail -n1 | awk '{print $1}')
+	# Search for full backups in the files subfolder of the current month
+	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE/files"/full* 2>/dev/null | tail -n1 | awk '{print $1}')
 	if [ -n "$FULL_CHECK" ]; then
 		FULL_SIZE=$FULL_CHECK
 	fi
@@ -428,8 +426,8 @@ backup () {
 
 	# Get available space on the partition hosting BACKUP_ROOT_DIR
 	AVAIL_SPACE=$(df -hP "$BACKUP_ROOT_DIR" | awk 'NR==2 {print $4}')
-	
-	log "Stats for $MONTH_DATE | Full: $FULL_SIZE | Incr/DB: $INCR_SIZE | Free: $AVAIL_SPACE"
+
+	log "Stats for $MONTH_DATE | Full: $FULL_SIZE | Incr/DB/Log: $INCR_SIZE | Free: $AVAIL_SPACE"
 
 	if [ -n "${MAIL}" ]; then
 		SUBJECT="Backup of $COMPUTER $(date +'%F')"
@@ -573,22 +571,19 @@ restore() {
 	if [ $type = "dir" ]; then
 		if [[ "$DIRECTORIES all" =~ "$2" ]]; then
 			if [ $dir = "all" ]; then
-				farh=$(find "$BACKUP_DIR" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep ^full_)
-				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep -v ^db-)
-				# echo farh este $farh
-				# echo arh este $arh
+				farh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep ^full_)
+				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep -v ^db-)
 			else
-				farh=$(find "$BACKUP_DIR" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep "$dir" | grep ^full_)
-				# echo farh e $farh
-				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" | sed 's_.*/__' | grep "$dir" | grep -v ^db-)
-				# echo arh e $arh
+				farh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep "$dir" | grep ^full_)
+				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep "$dir" | grep -v ^db-)
 			fi
 			for f in $farh; do
 				echo -en "\tExtracting $f...\n\n"
-				if [ -d "$BACKUP_DIR/$f" ]; then
-					cat "$BACKUP_DIR/$f"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+				B_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/files"
+				if [ -d "$B_ROOT/$f" ]; then
+					cat "$B_ROOT/$f"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
 				else
-					$TAR $EXTRACT_ARGS "$BACKUP_DIR/$f" -C "$path" &>/dev/null
+					$TAR $EXTRACT_ARGS "$B_ROOT/$f" -C "$path" &>/dev/null
 				fi
 				# if the day is 01 the the full backup is recovered so we need to clean newer files created after the backup date.
 				if [ $DAY_OF_MONTH = "01" ]; then
@@ -597,10 +592,11 @@ restore() {
 			done
 			for i in $arh; do
 				echo -en "\tExtracting $i...\n\n"
-				if [ -d "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" ]; then
-					cat "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+				B_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/files"
+				if [ -d "$B_ROOT/$i" ]; then
+					cat "$B_ROOT/$i"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
 				else
-					$TAR $EXTRACT_ARGS "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" -C "$path" &>/dev/null
+					$TAR $EXTRACT_ARGS "$B_ROOT/$i" -C "$path" &>/dev/null
 				fi
 			done
 			del_res $path $2 $3 $TMP_DIR
@@ -610,21 +606,26 @@ restore() {
 	elif [ "$type" = "db" ]; then
 		db=$2
 		# here we build the db list to restore from the files we backed up before in the day requested
-		dblist=$(find  $BACKUP_DIR/$YDATE-$MONTH_DATE -maxdepth 1 -type f | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | cut -d "-" -f2)
+		DB_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/db"
+		dblist=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | cut -d "-" -f2)
 		dblist="$dblist all"
 		#echo $dblist
 		for d in $dblist; do
 			if [ "$d" == "$2" ]; then
 				if [ "$db" = "all" ]; then
 					# get db list from backup and restore all db's
-					arh=$(find  $BACKUP_DIR/$YDATE-$MONTH_DATE -maxdepth 1 -type f | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				else
-					arh=$(find  $BACKUP_DIR/$YDATE-$MONTH_DATE -maxdepth 1 -type f | sed 's_.*/__' | grep ^db- | grep $db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep "$db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				fi
 				for i in $arh; do
 					rdb=$(echo $i | cut -d "-" -f2)
 					mysql --user="$DB_USER" --password="$DB_PASSWORD" --execute "CREATE DATABASE IF NOT EXISTS $rdb;"
-					$TAR -xOf "$BACKUP_DIR/$YDATE-$MONTH_DATE/$i" | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
+					if [ -d "$DB_ROOT/$i" ]; then
+						cat "$DB_ROOT/$i"/part-* | $TAR --gzip -xOf - | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
+					else
+						$TAR --gzip -xOf "$DB_ROOT/$i" | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
+					fi
 				done
 				echo -en "All restore jobs done!\nDatabase $2 restored to date $3!\n"
 			fi

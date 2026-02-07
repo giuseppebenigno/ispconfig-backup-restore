@@ -1,5 +1,11 @@
 # Changelog
 
+## version 0.19.0 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+- Added: Self-contained monthly directory structure (`YYYY-MM/{files,db,log}`).
+- Added: Databases are now stored in a dedicated `db/` subfolder.
+- Added: Logs are now stored within the monthly `log/` subfolder.
+- Improved: Restoration logic updated to search within the new directory hierarchy.
+
 ## version 0.18.3 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Added: Log the compression tool used at the beginning of the backup process.
 
