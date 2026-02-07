@@ -1,5 +1,17 @@
 # Changelog
 
+## version 0.19.1 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Fix: Handled unbound variable `$1` (and others) when no arguments are provided, preventing crash with `set -u`.
+- Fix: Resolved `log1` unbound variable error causing script failure in Cron during new log file creation.
+- Fix: Corrected `shutdown` command typo (replaced en-dash with hyphen).
+- Fix: Improved `mail` command usage to use autodetected path and prevent failure if `mail` is missing.
+- Fix: Use Bash arrays for `DIRECTORIES` to correctly handle paths with spaces.
+- Fix: Updated restore logic in `backup-restore-gz.sh` to use `find` instead of parsing `ls`, improving robustness.
+- Improved: Added `set -u` to both scripts to catch unbound variables.
+- Improved: Added `set -o pipefail` to `backup-restore-gz.sh` (already present in zstd).
+- Improved: Quoted variables to prevent word splitting and globbing issues.
+
 ## version 0.19.0 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 - Added: Self-contained monthly directory structure (`YYYY-MM/{files,db,log}`).
 - Added: Databases are now stored in a dedicated `db/` subfolder.

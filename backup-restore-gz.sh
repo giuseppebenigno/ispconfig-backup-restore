@@ -1,6 +1,7 @@
-#! /bin/bash
+#!/bin/bash
 set -o pipefail
-version="0.19.0"
+set -u
+version="0.19.1"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -13,7 +14,7 @@ version="0.19.0"
 
 # Change the variables below to fit your computer/backup
 COMPUTER=$(hostname -f)					# name of this computer
-DIRECTORIES="/etc"						# directories to backup (DO NOT ADD VAR_DIR HERE!)
+DIRECTORIES=("/etc")						# directories to backup (DO NOT ADD VAR_DIR HERE!)
 VAR_DIR="/var"
 WWW_DIR="www"							# Directory holding websites (global) (must reside in VAR_DIR!)
 CLIENTS_DIR="clients"					# Directory holding websites per client (must reside in WWW_DIR!)
@@ -83,7 +84,7 @@ if [[ -d "$VAR_DIR" ]]; then
 	for path in "$VAR_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$path" != "$BACKUP_ROOT_DIR" && "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
-			DIRECTORIES="$DIRECTORIES $path"
+			DIRECTORIES+=("$path")
 		fi
 	done
 fi
@@ -93,7 +94,7 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 	for path in "$VAR_DIR/$WWW_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$i" != "$CLIENTS_DIR" ]]; then
-			DIRECTORIES="$DIRECTORIES $path"
+			DIRECTORIES+=("$path")
 		fi
 	done
 
@@ -102,11 +103,11 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 			# If it's a directory, add its children (websites)
 			if [[ -d "$client_path" ]]; then
 				for web_path in "$client_path"/*; do
-					DIRECTORIES="$DIRECTORIES $web_path"
+					DIRECTORIES+=("$web_path")
 				done
 			else
 				# If it's a file, adds it directly
-				DIRECTORIES="$DIRECTORIES $client_path"
+				DIRECTORIES+=("$client_path")
 			fi
 		done
 	fi
@@ -115,7 +116,7 @@ fi
 # Add all subdirectories of MAIL_DIR to DIRECTORIES
 if [[ -d "$VAR_DIR/$MAIL_DIR" ]]; then
 	for path in "$VAR_DIR/$MAIL_DIR"/*; do
-		DIRECTORIES="$DIRECTORIES $path"
+		DIRECTORIES+=("$path")
 	done
 fi
 
@@ -174,9 +175,9 @@ backup () {
 		else
 			if [ ! -d $BACKUP_DIR/$MONTH_DATE/log ]; then
 				mkdir -p $BACKUP_DIR/$MONTH_DATE/log
-				if [ -n "$log1" ]; then
-					echo "$log1" >> $LOG_FILE
-					echo "$log1" >> $TMP_DIR/maildata
+				if [ -n "${log1:-}" ]; then
+					echo "${log1}" >> $LOG_FILE
+					echo "${log1}" >> $TMP_DIR/maildata
 				fi
 				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $LOG_FILE
 				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $TMP_DIR/maildata
@@ -235,13 +236,15 @@ backup () {
 		PERCENT_OF_USED_DISK=$(df -h $BACKUP_DIR | awk 'NR==2{print $5}' | cut -d% -f 1)
 		#PERCENT_OF_USED_DISK="90"
 
-		if [ $PERCENT_OF_USED_DISK -gt $MAX_PERCENT_OF_USED_SPACE ];then
+		if [ "$PERCENT_OF_USED_DISK" -gt "$MAX_PERCENT_OF_USED_SPACE" ];then
 			log "There is $PERCENT_OF_USED_DISK% space used on $BACKUP_DIR"
-			if [ $DELETE_OLD = "yes" ]; then
+			if [ "$DELETE_OLD" = "yes" ]; then
 				del_old_files
 			else
 				log "No free space and DELETE_OLD=$DELETE_OLD so we abort here and send mail to $EMAIL_TO"
-				mail -s "Daily backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+				if [ -n "${MAIL}" ]; then
+					${MAIL} -s "Daily backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+				fi
 				exit
 			fi
 		else
@@ -258,9 +261,9 @@ backup () {
 		log "Starting automatic repair and optimize for all databases..."
 		mysqlcheck -u$DB_USER -p$DB_PASSWORD --all-databases --optimize --auto-repair --silent 2>&1
 		### Starting database dumps
-		for i in $(mysql -u$DB_USER -p$DB_PASSWORD -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
+		for i in $(mysql -u"$DB_USER" -p"$DB_PASSWORD" -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
 			log "Starting mysqldump $i"
-			$(mysqldump -u$DB_USER -p$DB_PASSWORD $i --allow-keywords --comments=false --routines --triggers --add-drop-table > $TMP_DIR/db-$i-$FULL_DATE.sql)
+			$(mysqldump -u"$DB_USER" -p"$DB_PASSWORD" "$i" --allow-keywords --comments=false --routines --triggers --add-drop-table > "$TMP_DIR/db-$i-$FULL_DATE.sql")
 			if [ -n "$SPLIT_SIZE" ]; then
 				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				mkdir -p "$B_DIR"
@@ -285,9 +288,9 @@ backup () {
 			echo -e "$a" >> "$TMP_DIR/excluded"
 		done <<< "$EXCLUDED"
 
-		for i in $(echo $DIRECTORIES) ; do
-			UNDERSCORED_DIR=$(echo $i | awk '{gsub("/", "_", $0); print}')
-			TARGET_DIR=$(echo $i | awk '{print $1}')
+		for i in "${DIRECTORIES[@]}"; do
+			UNDERSCORED_DIR=$(echo "$i" | awk '{gsub("/", "_", $0); print}')
+			TARGET_DIR="$i"
 			# Check for monthly full backup in the monthly files directory
 			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/files" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
 
@@ -375,7 +378,7 @@ backup () {
 			fi
 		done
 
-		shutdown –r now
+		shutdown -r now
 		reboot
 	}
 
@@ -484,10 +487,17 @@ restore() {
 
 	# poor date input verification: ${#RDATE} is 10 for a correct date 2009-01-30
 	# find the first possible restore date=day
-	year=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 2)
-	md=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 3)
-	day=$(ls -ctF $BACKUP_DIR | grep -v ^log/ | tail -n 1 | cut -d "-" -f 4 | cut -d "." -f 1)
-	resdate=$year$md$day
+	# Updated to search in subdirectories (files subfolder)
+	first_backup=$(find "$BACKUP_DIR" -maxdepth 2 -name "full*-*" 2>/dev/null | sort | head -n 1)
+	if [ -n "$first_backup" ]; then
+		year=$(echo $(basename "$first_backup") | cut -d "-" -f 2)
+		md=$(echo $(basename "$first_backup") | cut -d "-" -f 3)
+		day=$(echo $(basename "$first_backup") | cut -d "-" -f 4 | cut -d "." -f 1)
+		resdate=$year$md$day
+	else
+		# Fallback if no backup found
+		resdate=$(date +%Y%m%d)
+	fi
 
 	dh="1234"
 	err=$(touch -t $YDATE$MONTH_DATE$DAY_OF_MONTH$dh $TMP_DIR/datestart 2>&1)
@@ -542,7 +552,7 @@ restore() {
 				sleep 5 # We wait 5 secs for the user to see what's happening.
 			else
 				# We suppose the user uses /dir
-				if [[ "$DIRECTORIES all" =~ "$2" ]]; then
+				if [[ "${DIRECTORIES[*]} all" =~ "$2" ]]; then
 					echo -en "\nTrying to restore $2 dir's backup from date $3 to $path:\n\n"
 					# we say "trying" because if the requested dir is "al" it matches!
 					sleep 5
@@ -568,8 +578,8 @@ restore() {
 	dst="010000" # first minute of the first day
 	touch -t $YDATE$MONTH_DATE$dst $TMP_DIR/datestart 2>&1
 	touch -t $YDATE$MONTH_DATE$DAY_OF_MONTH$LAST_MINUTE_OF_THE_DAY $TMP_DIR/dateend 2>&1
-	if [ $type = "dir" ]; then
-		if [[ "$DIRECTORIES all" =~ "$2" ]]; then
+	if [ "$type" = "dir" ]; then
+		if [[ "${DIRECTORIES[*]} all" =~ "$2" ]]; then
 			if [ $dir = "all" ]; then
 				farh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep ^full_)
 				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep -v ^db-)
@@ -645,14 +655,16 @@ restore() {
 	fi
 
 	# Send accumulated maildata an cleanup
-	mail -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+	if [ -n "${MAIL}" ]; then
+		${MAIL} -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+	fi
 	rm -rf $TMP_DIR/datestart
 	rm -rf $TMP_DIR/dateend
 	rm -rf $TMP_DIR/excluded
 	rm -rf $TMP_DIR/maildata
 }
 
-case "$1" in
+case "${1:-}" in
 -h|--help)
 	print_usage
 	exit 0
@@ -663,12 +675,12 @@ case "$1" in
 	exit 0
 	;;
 dir)
-	restore $1 $2 $3 $4
+	restore "${1:-}" "${2:-}" "${3:-}" "${4:-}"
 	;;
 db)
-	restore $1 $2 $3 $4
+	restore "${1:-}" "${2:-}" "${3:-}" "${4:-}"
 	;;
 *)
-	backup $1
+	backup "${1:-}"
 	exit 1
 esac
