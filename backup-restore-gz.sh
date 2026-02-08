@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.19.2"
+version="0.19.3"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -103,12 +103,25 @@ SERVICES_TO_STOP=(
 # Enable globbing for hidden files (dotglob) and handle empty matches (nullglob)
 shopt -s dotglob nullglob
 
+# Function to check if a path is excluded
+is_excluded() {
+	local path="$1"
+	for pattern in $EXCLUDED; do
+		# Use shell glob matching for the pattern
+		if [[ "$path" == $pattern ]]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
 # Add /var excluding subdirectories /var/www and /var/vmail to DIRECTORIES
 # Also exclude the BACKUP_ROOT_DIR itself
 if [[ -d "$VAR_DIR" ]]; then
 	for path in "$VAR_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$path" != "$BACKUP_ROOT_DIR" && "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
+			if is_excluded "$path"; then continue; fi
 			DIRECTORIES+=("$path")
 		fi
 	done
@@ -119,6 +132,7 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 	for path in "$VAR_DIR/$WWW_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$i" != "$CLIENTS_DIR" ]]; then
+			if is_excluded "$path"; then continue; fi
 			DIRECTORIES+=("$path")
 		fi
 	done
@@ -128,10 +142,12 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 			# If it's a directory, add its children (websites)
 			if [[ -d "$client_path" ]]; then
 				for web_path in "$client_path"/*; do
+					if is_excluded "$web_path"; then continue; fi
 					DIRECTORIES+=("$web_path")
 				done
 			else
 				# If it's a file, adds it directly
+				if is_excluded "$client_path"; then continue; fi
 				DIRECTORIES+=("$client_path")
 			fi
 		done
@@ -141,6 +157,7 @@ fi
 # Add all subdirectories of MAIL_DIR to DIRECTORIES
 if [[ -d "$VAR_DIR/$MAIL_DIR" ]]; then
 	for path in "$VAR_DIR/$MAIL_DIR"/*; do
+		if is_excluded "$path"; then continue; fi
 		DIRECTORIES+=("$path")
 	done
 fi

@@ -11,7 +11,7 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Database Optimization**: Automatic repair and optimization of all MySQL databases before dumping.
 - **Compression**: Choose between `gzip` (via `pigz` if available) or `zstd` versions.
 
-## Directory Structure (Version 0.19.2+)
+## Directory Structure (Version 0.19.3+)
 
 The script organizes backups into a clean, modular hierarchy:
 

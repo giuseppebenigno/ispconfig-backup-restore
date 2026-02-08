@@ -1,8 +1,11 @@
 # Changelog
 
-## version 0.19.2 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+## version 0.19.3 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
-- Improved: Reformatted `EXCLUDED` variable to a more readable vertical list format (one path per line), ensuring better parsing by `tar` and easier management.
+- Improved: Enhanced exclusion logic by adding a `is_excluded()` helper function.
+- Improved: Optimized performance by skipping excluded directories during the initial scan, preventing `tar` from being called on large excluded folders (e.g., Seafile).
+
+## version 0.19.2 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
 ## version 0.19.1 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
