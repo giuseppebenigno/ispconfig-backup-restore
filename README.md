@@ -7,9 +7,11 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Self-Contained Monthly Backups**: All data (files, databases, and logs) for a month are grouped in a `YYYY-MM` directory.
 - **Incremental & Full Backups**: Automatic full monthly backup followed by daily incremental updates.
 - **Split Backups**: Support for splitting large backup files into manageable parts.
+- **Automatic Exclusions**: Skips `**/tmp/*` (Maildir) and common socket/lock files.
 - **Email Notifications**: Alerts sent at the start and end of the backup process.
 - **Database Optimization**: Automatic repair and optimization of all MySQL databases before dumping.
 - **Compression**: Choose between `gzip` (via `pigz` if available) or `zstd` versions.
+- **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 
 ## Directory Structure (Version 0.22.0+)

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.22.0"
+version="0.22.1"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -62,6 +62,7 @@ EXCLUDED="
 	*.lock
 	*.pid
 	*.sock
+	**/tmp/*
 	/dev
 	/lib/init/rw
 	/media
@@ -378,57 +379,65 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
-							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-							log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
-						else
-							log "Error backing up $TARGET_DIR (split)"
-						fi
-					fi
-				else
-					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-					rm -f "$BACKUP_FILE.part"
-
-					if [ ! -f "$BACKUP_FILE" ]; then
-						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
-							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-							log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
-						else
-							log "Error backing up $TARGET_DIR"
-						fi
+						ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+					RET=$?
+					if [ $RET -le 1 ]; then
+						mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+						[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
+					else
+						log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
 					fi
 				fi
 			else
-				# If there is already a full backup for this month, let's do the incremental backup
-				if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
-					log "Starting incremental backup for: $TARGET_DIR"
-					echo "$TARGET_DIR"
-					NEWER="--newer $FULL_DATE"
-					if [ -n "$SPLIT_SIZE" ]; then
-						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE"
-						if [ ! -d "$BACKUP_DIR_NAME" ]; then
-							rm -rf "$BACKUP_DIR_NAME.part"
-							mkdir -p "$BACKUP_DIR_NAME.part"
-							if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
-								mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-								log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
-							else
-								log "Error backing up $TARGET_DIR (split)"
-							fi
-						fi
+				BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+				rm -f "$BACKUP_FILE.part"
+ 
+				if [ ! -f "$BACKUP_FILE" ]; then
+					ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"
+					RET=$?
+					if [ $RET -le 1 ]; then
+						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+						[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
 					else
-						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-						rm -f "$BACKUP_FILE.part"
-
-						if [ ! -f "$BACKUP_FILE" ]; then
-							if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
-								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-								log "Incremental backup for $TARGET_DIR done (to $subfolder)."
-							else
-								log "Error backing up $TARGET_DIR"
-							fi
+						log "Error backing up $TARGET_DIR - Exit code: $RET"
+					fi
+				fi
+			fi
+		else
+			# If there is already a full backup for this month, let's do the incremental backup
+			if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
+				log "Starting incremental backup for: $TARGET_DIR"
+				echo "$TARGET_DIR"
+				NEWER="--newer $FULL_DATE"
+				if [ -n "$SPLIT_SIZE" ]; then
+					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE"
+					if [ ! -d "$BACKUP_DIR_NAME" ]; then
+						rm -rf "$BACKUP_DIR_NAME.part"
+						mkdir -p "$BACKUP_DIR_NAME.part"
+						ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						RET=$?
+						if [ $RET -le 1 ]; then
+							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+							[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
+						else
+							log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
 						fi
 					fi
+				else
+					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+					rm -f "$BACKUP_FILE.part"
+ 
+					if [ ! -f "$BACKUP_FILE" ]; then
+						ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"
+						RET=$?
+						if [ $RET -le 1 ]; then
+							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+							[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Incremental backup for $TARGET_DIR done (to $subfolder)."
+						else
+							log "Error backing up $TARGET_DIR - Exit code: $RET"
+						fi
+					fi
+				fi
 				else
 					log "Lock file for $TARGET_DIR full backup exists!"
 				fi

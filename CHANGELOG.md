@@ -1,5 +1,11 @@
 # Changelog
  
+## version 0.22.1 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+ 
+- Improved: Enhanced reliability for large directories by tolerating `tar` Exit Code 1 ("file changed as we read it").
+- Added: Automatic exclusion of transient files (`**/tmp/*`) to prevent backup failures in Maildir and other temporary folders.
+ 
+ 
 ## version 0.22.0 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
  
 - Added: Full modularization of backups into `web/`, `mail/`, and `system/` subdirectories.
