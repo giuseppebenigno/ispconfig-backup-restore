@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.19.2 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Improved: Reformatted `EXCLUDED` variable to a more readable vertical list format (one path per line), ensuring better parsing by `tar` and easier management.
+
 ## version 0.19.1 - 2026-02-07 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
 - Fix: Handled unbound variable `$1` (and others) when no arguments are provided, preventing crash with `set -u`.

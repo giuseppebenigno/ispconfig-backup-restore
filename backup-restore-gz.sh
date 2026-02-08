@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.19.1"
+version="0.19.2"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -52,12 +52,37 @@ LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the re
 BACKUP_DB="yes"							# Backup database?
 BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
 BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
-EXCLUDED=" *.lck *.lock *.pid *.sock
-/dev /lib/init/rw /media /proc /srv /sys /tmp
-/var/adm /var/amavis $BACKUP_ROOT_DIR /var/cache /var/crash
-/var/lib/amavis /var/lib/apache2/fcgid /var/lib/mysql /var/lock /var/log/verlihub
-/var/run /var/spool/postfix/p* /var/spool/postfix/var /var/spool/postfix/dev/log
-/var/tmp /var/www/owncloud /var/www/roundcube /var/www/seafile /var/www/clients/client2/web44"			# exclude those dir's and files
+EXCLUDED="
+	*.lck
+	*.lock
+	*.pid
+	*.sock
+	/dev
+	/lib/init/rw
+	/media
+	/proc
+	/srv
+	/sys
+	/tmp
+	/var/adm
+	/var/amavis
+	$BACKUP_ROOT_DIR
+	/var/cache
+	/var/crash
+	/var/lib/amavis
+	/var/lib/apache2/fcgid
+	/var/lib/mysql
+	/var/lock
+	/var/log/verlihub
+	/var/run
+	/var/spool/postfix/p*
+	/var/spool/postfix/var
+	/var/spool/postfix/dev/log
+	/var/tmp
+	/var/www/owncloud
+	/var/www/roundcube
+	/var/www/seafile
+	/var/www/clients/client2/web44"			# exclude those dir's and files
 REBOOT_ON_FINISH=false				# Reboot system after backup
 
 # Services to stop before reboot (space separated list or array)
@@ -284,9 +309,9 @@ backup () {
 	function dirs_backup {
 		rm -rf "$TMP_DIR/excluded"
 		touch "$TMP_DIR/excluded"
-		while IFS= read -r a; do
-			echo -e "$a" >> "$TMP_DIR/excluded"
-		done <<< "$EXCLUDED"
+		for pattern in $EXCLUDED; do
+			echo "$pattern" >> "$TMP_DIR/excluded"
+		done
 
 		for i in "${DIRECTORIES[@]}"; do
 			UNDERSCORED_DIR=$(echo "$i" | awk '{gsub("/", "_", $0); print}')
