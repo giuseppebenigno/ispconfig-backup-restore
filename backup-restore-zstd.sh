@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.22.1"
+version="0.22.2"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -368,6 +368,22 @@ backup () {
 		for i in "${targets[@]}"; do
 			UNDERSCORED_DIR=$(echo "$i" | awk '{gsub("/", "_", $0); print}')
 			TARGET_DIR="$i"
+
+			# Check if any backup for today already exists
+			if [ -n "$SPLIT_SIZE" ]; then
+				if [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE" ] || \
+				   [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE" ]; then
+					log "Backup for $TARGET_DIR already exists for $FULL_DATE. Skipping."
+					continue
+				fi
+			else
+				if [ -f "$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT" ] || \
+				   [ -f "$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT" ]; then
+					log "Backup for $TARGET_DIR already exists for $FULL_DATE. Skipping."
+					continue
+				fi
+			fi
+
 			# Check for monthly full backup in the monthly target directory
 			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/$subfolder" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
 

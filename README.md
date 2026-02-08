@@ -11,6 +11,7 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Email Notifications**: Alerts sent at the start and end of the backup process.
 - **Database Optimization**: Automatic repair and optimization of all MySQL databases before dumping.
 - **Compression**: Choose between `gzip` (via `pigz` if available) or `zstd` versions.
+- **Duplicate Prevention**: Automatically skips backups if they already exist for the current day to save time and resources.
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 

@@ -1,5 +1,10 @@
 # Changelog
- 
+
+## version 0.22.2 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Added: Check for existing backups for the current day in `dirs_backup`. If a backup (full or incremental) already exists for today, it will be skipped to save time and resources.
+
+
 ## version 0.22.1 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
  
 - Improved: Enhanced reliability for large directories by tolerating `tar` Exit Code 1 ("file changed as we read it").
