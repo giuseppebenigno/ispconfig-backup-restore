@@ -13,13 +13,20 @@ version="0.22.0"
 ###############################
 
 # Change the variables below to fit your computer/backup
+# What parts of the system to backup. (yes/no)
+BACKUP_DB="yes"
+BACKUP_WEB="yes"
+BACKUP_MAIL="yes"
+BACKUP_SYSTEM="yes"
+BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
 COMPUTER=$(hostname -f)					# name of this computer
-DIRECTORIES=("/etc")						# directories to backup (DO NOT ADD VAR_DIR HERE!)
+BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
+
 VAR_DIR="/var"
 WWW_DIR="www"							# Directory holding websites (global) (must reside in VAR_DIR!)
 CLIENTS_DIR="clients"					# Directory holding websites per client (must reside in WWW_DIR!)
 MAIL_DIR="vmail"						# Directory holding mail (must reside in VAR_DIR!)
-# DB_host=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_host' | cut -d"'" -f 2)					# database user
+
 DB_USER=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_user' | cut -d"'" -f 2)					# database user
 DB_PASSWORD=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$clientdb_password' | cut -d"'" -f 2)				# database password
 EMAIL_FROM="$(hostname)@$(hostname -d)"
@@ -49,14 +56,7 @@ mkdir -p "$TMP_DIR"
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
 MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
- 
-# What parts of the system to backup. (yes/no)
-BACKUP_DB="yes"
-BACKUP_WEB="yes"
-BACKUP_MAIL="yes"
-BACKUP_SYSTEM="yes"
-BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
-BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
+
 EXCLUDED="
 	*.lck
 	*.lock
@@ -349,7 +349,7 @@ backup () {
 
 	function dirs_backup {
 		# This function now takes two arguments:
-		# 1: target subfolder (files or mail)
+		# 1: target subfolder (e.g., web, mail, or system)
 		# 2: name of the array containing directories to back up
 		local subfolder="$1"
 		local array_name="$2[@]"
