@@ -1,5 +1,14 @@
 # Changelog
  
+## version 0.22.0 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+ 
+- Added: Full modularization of backups into `web/`, `mail/`, and `system/` subdirectories.
+- Added: Granular backup toggles `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM` for precise control.
+- Improved: Removed the legacy and redundant `BACKUP_FILES` variable.
+- Improved: Refactored `dirs_backup` to support the new modular structure.
+- Removed: Backward compatibility with the legacy `files/` directory in the `restore` function for a cleaner and more modern architecture.
+ 
+ 
 ## version 0.19.6 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
  
 - Improved: Added script version and compression format (extension) to the logging output at the start of the backup process.

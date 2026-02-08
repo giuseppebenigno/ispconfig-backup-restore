@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.19.6"
+version="0.22.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -49,8 +49,12 @@ mkdir -p "$TMP_DIR"
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
 MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
-BACKUP_DB="yes"							# Backup database?
-BACKUP_FILES="yes"						# Backup files?
+ 
+# What parts of the system to backup. (yes/no)
+BACKUP_DB="yes"
+BACKUP_WEB="yes"
+BACKUP_MAIL="yes"
+BACKUP_SYSTEM="yes"
 BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
 BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
 EXCLUDED="
@@ -104,6 +108,10 @@ SERVICES_TO_STOP=(
 # Enable globbing for hidden files (dotglob) and handle empty matches (nullglob)
 shopt -s dotglob nullglob
 
+SYSTEM_DIRECTORIES=("/etc")
+WEB_DIRECTORIES=()
+MAIL_DIRECTORIES=()
+
 # Function to check if a path is excluded
 is_excluded() {
 	local path="$1"
@@ -116,25 +124,25 @@ is_excluded() {
 	return 1
 }
 
-# Add /var excluding subdirectories /var/www and /var/vmail to DIRECTORIES
+# Add /var excluding subdirectories /var/www and /var/vmail to SYSTEM_DIRECTORIES
 # Also exclude the BACKUP_ROOT_DIR itself
 if [[ -d "$VAR_DIR" ]]; then
 	for path in "$VAR_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$path" != "$BACKUP_ROOT_DIR" && "$i" != "$WWW_DIR" && "$i" != "$MAIL_DIR" ]]; then
 			if is_excluded "$path"; then continue; fi
-			DIRECTORIES+=("$path")
+			SYSTEM_DIRECTORIES+=("$path")
 		fi
 	done
 fi
 
-# Add /var/www excluding subdirectories of /var/www/clients and all subdirectories of /var/www/clients to DIRECTORIES
+# Add /var/www excluding subdirectories of /var/www/clients and all subdirectories of /var/www/clients to WEB_DIRECTORIES
 if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 	for path in "$VAR_DIR/$WWW_DIR"/*; do
 		i=$(basename "$path")
 		if [[ "$i" != "$CLIENTS_DIR" ]]; then
 			if is_excluded "$path"; then continue; fi
-			DIRECTORIES+=("$path")
+			WEB_DIRECTORIES+=("$path")
 		fi
 	done
 
@@ -144,22 +152,22 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 			if [[ -d "$client_path" ]]; then
 				for web_path in "$client_path"/*; do
 					if is_excluded "$web_path"; then continue; fi
-					DIRECTORIES+=("$web_path")
+					WEB_DIRECTORIES+=("$web_path")
 				done
 			else
 				# If it's a file, adds it directly
 				if is_excluded "$client_path"; then continue; fi
-				DIRECTORIES+=("$client_path")
+				WEB_DIRECTORIES+=("$client_path")
 			fi
 		done
 	fi
 fi
 
-# Add all subdirectories of MAIL_DIR to DIRECTORIES
+# Add all subdirectories of MAIL_DIR to MAIL_DIRECTORIES
 if [[ -d "$VAR_DIR/$MAIL_DIR" ]]; then
 	for path in "$VAR_DIR/$MAIL_DIR"/*; do
 		if is_excluded "$path"; then continue; fi
-		DIRECTORIES+=("$path")
+		MAIL_DIRECTORIES+=("$path")
 	done
 fi
 
@@ -235,8 +243,8 @@ backup () {
 
 	function check_mdir {
 		log "Checking if month dirs exist: $BACKUP_DIR/$MONTH_DATE"
-		mkdir -p $BACKUP_DIR/$MONTH_DATE/{db,files,log}
-		log "Month subdirs (db, files, log) ensured"
+		mkdir -p $BACKUP_DIR/$MONTH_DATE/{db,web,mail,system,log}
+		log "Month subdirs (db, web, mail, system, log) ensured"
 	}
 
 	function check_tempdir {
@@ -340,44 +348,51 @@ backup () {
 	}
 
 	function dirs_backup {
+		# This function now takes two arguments:
+		# 1: target subfolder (files or mail)
+		# 2: name of the array containing directories to back up
+		local subfolder="$1"
+		local array_name="$2[@]"
+		local targets=("${!array_name}")
+
 		rm -rf "$TMP_DIR/excluded"
 		touch "$TMP_DIR/excluded"
 		for pattern in $EXCLUDED; do
 			echo "$pattern" >> "$TMP_DIR/excluded"
 		done
 
-		for i in "${DIRECTORIES[@]}"; do
+		for i in "${targets[@]}"; do
 			UNDERSCORED_DIR=$(echo "$i" | awk '{gsub("/", "_", $0); print}')
 			TARGET_DIR="$i"
-			# Check for monthly full backup in the monthly files directory
-			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/files" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
+			# Check for monthly full backup in the monthly target directory
+			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/$subfolder" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
 
-			if [ -z $FULL_BACKUP_FILE ]; then
+			if [ -z "$FULL_BACKUP_FILE" ]; then
 				# Monthly full backup
 				log "No full backup found for $TARGET_DIR in this month. Full backup now!"
-				echo > $TMP_DIR/full-backup$UNDERSCORED_DIR.lck
+				echo > "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck"
 				echo "$TARGET_DIR"
 				NEWER=""
 				if [ -n "$SPLIT_SIZE" ]; then
-					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/files/full$UNDERSCORED_DIR-$FULL_DATE"
+					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE"
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
 						if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
 							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-							log "Full monthly backup of $TARGET_DIR done (split)."
+							log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
 						else
 							log "Error backing up $TARGET_DIR (split)"
 						fi
 					fi
 				else
-					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/files/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-					rm -f $BACKUP_FILE.part
- 
-					if [ ! -f $BACKUP_FILE ]; then
+					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+					rm -f "$BACKUP_FILE.part"
+
+					if [ ! -f "$BACKUP_FILE" ]; then
 						if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-							log "Full monthly backup of $TARGET_DIR done."
+							log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
 						else
 							log "Error backing up $TARGET_DIR"
 						fi
@@ -390,25 +405,25 @@ backup () {
 					echo "$TARGET_DIR"
 					NEWER="--newer $FULL_DATE"
 					if [ -n "$SPLIT_SIZE" ]; then
-						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/files/i$UNDERSCORED_DIR-$FULL_DATE"
+						BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE"
 						if [ ! -d "$BACKUP_DIR_NAME" ]; then
 							rm -rf "$BACKUP_DIR_NAME.part"
 							mkdir -p "$BACKUP_DIR_NAME.part"
 							if ionice -c3 nice -n 19 $TAR -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"; then
 								mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-								log "Incremental backup for $TARGET_DIR done (split)."
+								log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
 							else
 								log "Error backing up $TARGET_DIR (split)"
 							fi
 						fi
 					else
-						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/files/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+						BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 						rm -f "$BACKUP_FILE.part"
- 
-						if [ ! -f $BACKUP_FILE ]; then
+
+						if [ ! -f "$BACKUP_FILE" ]; then
 							if ionice -c3 nice -n 19 $TAR $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"; then
 								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-								log "Incremental backup for $TARGET_DIR done."
+								log "Incremental backup for $TARGET_DIR done (to $subfolder)."
 							else
 								log "Error backing up $TARGET_DIR"
 							fi
@@ -462,7 +477,22 @@ backup () {
 	check_tempdir
 	log "Using script version $version with compression tool: $COMPRESSION_TOOL ($COMPRESSION_EXT)"
 	[ x"${BACKUP_DB}" == "xyes" ] && db_backup
-	[ x"${BACKUP_FILES}" == "xyes" ] && dirs_backup
+ 
+	# Determine which file categories to back up
+	if [ x"${BACKUP_WEB}" == "xyes" ]; then
+		log "Starting web backups (web/)..."
+		dirs_backup "web" "WEB_DIRECTORIES"
+	fi
+ 
+	if [ x"${BACKUP_MAIL}" == "xyes" ]; then
+		log "Starting mail backups (mail/)..."
+		dirs_backup "mail" "MAIL_DIRECTORIES"
+	fi
+ 
+	if [ x"${BACKUP_SYSTEM}" == "xyes" ]; then
+		log "Starting system backups (system/)..."
+		dirs_backup "system" "SYSTEM_DIRECTORIES"
+	fi
 
 	# End of script
 	log "All backup jobs done. Exiting script!"
@@ -471,11 +501,11 @@ backup () {
 	# Convert seconds to HH:MM:SS
 	FORMATTED_TIME=$(date -u -d @"${RUN_TIME}" +'%H:%M:%S')
 	log "Run time: ${FORMATTED_TIME} (${RUN_TIME}s)"
-	
+
 	# Calculate sizes
 	FULL_SIZE="0"
-	# Search for full backups in the files subfolder of the current month
-	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE/files"/full* 2>/dev/null | tail -n1 | awk '{print $1}')
+	# Search for full backups in the subfolders of the current month
+	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE"/{web,system,mail}/full* 2>/dev/null | tail -n1 | awk '{print $1}')
 	if [ -n "$FULL_CHECK" ]; then
 		FULL_SIZE=$FULL_CHECK
 	fi
@@ -507,7 +537,7 @@ backup () {
 restore() {
 	del_res() {
 		# We now need to remove the newer files created after the restored backup date.
-		to_rem=$(find $path/$2 -newer $TMP_DIR/dateend)
+		to_rem=$(find "$path/$2" -newer "$TMP_DIR/dateend")
 		echo -en "\n$headline\n    For a clean backup restored at $3 we need now to delete the files\ncreated after the backup date.\n    If exists, a list of files to be deleted follows:\n\n"
 		while IFS= read -r a; do
 			echo -e "To be removed: $a"
@@ -531,12 +561,12 @@ restore() {
 	fi
 
 	RDATE=$3
-	DAY_OF_MONTH=$(echo $RDATE | cut -d "-" -f3)		# Date of the Month eg. 27
-	MONTH_DATE=$(echo $RDATE | cut -d "-" -f2)
-	YDATE=$(echo $RDATE | cut -d "-" -f1)
+	DAY_OF_MONTH=$(echo "$RDATE" | cut -d "-" -f3)		# Date of the Month eg. 27
+	MONTH_DATE=$(echo "$RDATE" | cut -d "-" -f2)
+	YDATE=$(echo "$RDATE" | cut -d "-" -f1)
 
 	type=$1
-	dir=$(echo $2 | awk '{gsub("/", "_", $0); print}')
+	dir=$(echo "$2" | awk '{gsub("/", "_", $0); print}')
 
 	if [ -z "$3" ]; then
 		print_usage
@@ -545,12 +575,12 @@ restore() {
 
 	# poor date input verification: ${#RDATE} is 10 for a correct date 2009-01-30
 	# find the first possible restore date=day
-	# Updated to search in subdirectories (files subfolder)
+	# Updated to search in subdirectories
 	first_backup=$(find "$BACKUP_DIR" -maxdepth 2 -name "full*-*" 2>/dev/null | sort | head -n 1)
 	if [ -n "$first_backup" ]; then
-		year=$(echo $(basename "$first_backup") | cut -d "-" -f 2)
-		md=$(echo $(basename "$first_backup") | cut -d "-" -f 3)
-		day=$(echo $(basename "$first_backup") | cut -d "-" -f 4 | cut -d "." -f 1)
+		year=$(echo "$(basename "$first_backup")" | cut -d "-" -f 2)
+		md=$(echo "$(basename "$first_backup")" | cut -d "-" -f 3)
+		day=$(echo "$(basename "$first_backup")" | cut -d "-" -f 4 | cut -d "." -f 1)
 		resdate=$year$md$day
 	else
 		# Fallback if no backup found
@@ -610,7 +640,7 @@ restore() {
 				sleep 5 # We wait 5 secs for the user to see what's happening.
 			else
 				# We suppose the user uses /dir
-				if [[ "${DIRECTORIES[*]} all" =~ "$2" ]]; then
+				if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} all" =~ "$2" ]]; then
 					echo -en "\nTrying to restore $2 dir's backup from date $3 to $path:\n\n"
 					# we say "trying" because if the requested dir is "al" it matches!
 					sleep 5
@@ -637,34 +667,50 @@ restore() {
 	touch -t $YDATE$MONTH_DATE$dst $TMP_DIR/datestart 2>&1
 	touch -t $YDATE$MONTH_DATE$DAY_OF_MONTH$LAST_MINUTE_OF_THE_DAY $TMP_DIR/dateend 2>&1
 	if [ "$type" = "dir" ]; then
-		if [[ "${DIRECTORIES[*]} all" =~ "$2" ]]; then
+		if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} all" =~ "$2" ]]; then
+			# Search for requested directories in web, mail, and system subdirectories
+			B_WEB="$BACKUP_DIR/$YDATE-$MONTH_DATE/web"
+			B_MAIL="$BACKUP_DIR/$YDATE-$MONTH_DATE/mail"
+			B_SYSTEM="$BACKUP_DIR/$YDATE-$MONTH_DATE/system"
+			B_SEARCH_DIRS=()
+			[ -d "$B_WEB" ] && B_SEARCH_DIRS+=("$B_WEB")
+			[ -d "$B_MAIL" ] && B_SEARCH_DIRS+=("$B_MAIL")
+			[ -d "$B_SYSTEM" ] && B_SEARCH_DIRS+=("$B_SYSTEM")
+
 			if [ $dir = "all" ]; then
-				farh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep ^full_)
-				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep -v ^db-)
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full_)
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -vE "/(db-|log/)")
 			else
-				farh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep "$dir" | grep ^full_)
-				arh=$(find "$BACKUP_DIR/$YDATE-$MONTH_DATE/files" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | sed 's_.*/__' | grep "$dir" | grep -v ^db-)
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "$dir" | grep /full_)
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "$dir" | grep -vE "/(db-|log/)")
 			fi
-			for f in $farh; do
-				echo -en "\tExtracting $f...\n\n"
-				B_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/files"
-				if [ -d "$B_ROOT/$f" ]; then
-					cat "$B_ROOT/$f"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+
+			# Filter out entries that are not in the top level of our search dirs (to avoid finding files inside parts folders if they weren't sed'd out)
+			# But find with maxdepth 1 already handles this.
+			
+			for f_path in $farh; do
+				f=$(basename "$f_path")
+				echo -en "\tExtracting $f (from $(dirname "$f_path"))...\n\n"
+				if [ -d "$f_path" ]; then
+					cat "$f_path"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
 				else
-					$TAR $EXTRACT_ARGS "$B_ROOT/$f" -C "$path" &>/dev/null
+					$TAR $EXTRACT_ARGS "$f_path" -C "$path" &>/dev/null
 				fi
 				# if the day is 01 the the full backup is recovered so we need to clean newer files created after the backup date.
 				if [ $DAY_OF_MONTH = "01" ]; then
 					del_res $path $2 $3 $TMP_DIR
 				fi
 			done
-			for i in $arh; do
-				echo -en "\tExtracting $i...\n\n"
-				B_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/files"
-				if [ -d "$B_ROOT/$i" ]; then
-					cat "$B_ROOT/$i"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
+			for i_path in $arh; do
+				# Skip full backups as they were already processed
+				[[ "$(basename "$i_path")" =~ ^full_ ]] && continue
+				
+				i=$(basename "$i_path")
+				echo -en "\tExtracting $i (from $(dirname "$i_path"))...\n\n"
+				if [ -d "$i_path" ]; then
+					cat "$i_path"/part-* | $TAR --gzip $EXTRACT_ARGS - -C "$path" &>/dev/null
 				else
-					$TAR $EXTRACT_ARGS "$B_ROOT/$i" -C "$path" &>/dev/null
+					$TAR $EXTRACT_ARGS "$i_path" -C "$path" &>/dev/null
 				fi
 			done
 			del_res $path $2 $3 $TMP_DIR

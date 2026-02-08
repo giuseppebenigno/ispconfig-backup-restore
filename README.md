@@ -10,12 +10,12 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Email Notifications**: Alerts sent at the start and end of the backup process.
 - **Database Optimization**: Automatic repair and optimization of all MySQL databases before dumping.
 - **Compression**: Choose between `gzip` (via `pigz` if available) or `zstd` versions.
-- **Flexible Options**: Toggle `BACKUP_DB` and `BACKUP_FILES` independently.
+- **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 
-## Directory Structure (Version 0.19.4+)
-
+## Directory Structure (Version 0.22.0+)
+ 
 The script organizes backups into a clean, modular hierarchy:
-
+ 
 ```text
 /var/backup-restore/<hostname>/
 └── YYYY-MM/                          <-- Monthly Root
@@ -23,9 +23,15 @@ The script organizes backups into a clean, modular hierarchy:
     │   └── backup-YYYY-MM-DD.log
     ├── db/                           <-- Database Dumps
     │   └── db-<dbname>-YYYY-MM-DD.tar.gz
-    └── files/                        <-- File Backups
-        ├── full_<dirname>-YYYY-MM-DD.tar.gz
-        └── i_<dirname>-YYYY-MM-DD.tar.gz
+    ├── web/                          <-- Website Backups
+    │   ├── full_<webfolder>-YYYY-MM-DD.tar.gz
+    │   └── i_<webfolder>-YYYY-MM-DD.tar.gz
+    ├── mail/                         <-- Mail Backups
+    │   ├── full_<mailfolder>-YYYY-MM-DD.tar.gz
+    │   └── i_<mailfolder>-YYYY-MM-DD.tar.gz
+    └── system/                       <-- System Backups
+        ├── full_<sysfolder>-YYYY-MM-DD.tar.gz
+        └── i_<sysfolder>-YYYY-MM-DD.tar.gz
 ```
 
 ## Backup Usage
