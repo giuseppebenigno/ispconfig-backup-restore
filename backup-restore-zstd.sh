@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.19.5"
+version="0.19.6"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -463,7 +463,7 @@ backup () {
 
 	check_mdir
 	check_tempdir
-	log "Using compression tool: $COMPRESSION_TOOL"
+	log "Using script version $version with compression tool: $COMPRESSION_TOOL ($COMPRESSION_EXT)"
 	[ x"${BACKUP_DB}" == "xyes" ] && db_backup
 	[ x"${BACKUP_FILES}" == "xyes" ] && dirs_backup
 

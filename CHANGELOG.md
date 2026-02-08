@@ -1,4 +1,9 @@
 # Changelog
+ 
+## version 0.19.6 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+ 
+- Improved: Added script version and compression format (extension) to the logging output at the start of the backup process.
+ 
 
 ## version 0.19.5 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
