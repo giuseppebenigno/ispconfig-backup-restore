@@ -1,6 +1,10 @@
 # Changelog
 
-## version 0.19.3 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+## version 0.19.5 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Added: Check if database backup already exists for the current day to skip redundant operations on script restart.
+
+## version 0.19.4 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
 - Improved: Enhanced exclusion logic by adding a `is_excluded()` helper function.
 - Improved: Optimized performance by skipping excluded directories during the initial scan, preventing `tar` from being called on large excluded folders (e.g., Seafile).

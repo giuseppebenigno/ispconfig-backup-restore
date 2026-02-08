@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.19.3"
+version="0.19.5"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -50,6 +50,7 @@ DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX
 MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 BACKUP_DB="yes"							# Backup database?
+BACKUP_FILES="yes"						# Backup files?
 BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
 BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
 EXCLUDED="
@@ -304,6 +305,21 @@ backup () {
 		mysqlcheck -u$DB_USER -p$DB_PASSWORD --all-databases --optimize --auto-repair --silent 2>&1
 		### Starting database dumps
 		for i in $(mysql -u"$DB_USER" -p"$DB_PASSWORD" -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
+			# Check if backup already exists for today
+			if [ -n "$SPLIT_SIZE" ]; then
+				B_TARGET="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
+				if [ -d "$B_TARGET" ]; then
+					log "Database $i already backed up for $FULL_DATE. Skipping."
+					continue
+				fi
+			else
+				B_TARGET="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT"
+				if [ -f "$B_TARGET" ]; then
+					log "Database $i already backed up for $FULL_DATE. Skipping."
+					continue
+				fi
+			fi
+
 			log "Starting mysqldump $i"
 			$(mysqldump -u"$DB_USER" -p"$DB_PASSWORD" "$i" --allow-keywords --comments=false --routines --triggers --add-drop-table > "$TMP_DIR/db-$i-$FULL_DATE.sql")
 			if [ -n "$SPLIT_SIZE" ]; then
@@ -446,7 +462,7 @@ backup () {
 	check_tempdir
 	log "Using compression tool: $COMPRESSION_TOOL"
 	[ x"${BACKUP_DB}" == "xyes" ] && db_backup
-	dirs_backup
+	[ x"${BACKUP_FILES}" == "xyes" ] && dirs_backup
 
 	# End of script
 	log "All backup jobs done. Exiting script!"
