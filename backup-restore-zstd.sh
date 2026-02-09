@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.22.2"
+version="0.23.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) giuseppe.benigno@gmail.com
@@ -50,7 +50,7 @@ COMPRESSION_EXT=".tar.zst"
 # Example: SPLIT_SIZE="1G" or SPLIT_SIZE="500M"
 # If empty, no splitting will occur.
 SPLIT_SIZE="1G"
-# --- ZSTD CONFIGURATION END ---
+# --- END SPLIT CONFIGURATION ---
 
 EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
@@ -110,7 +110,7 @@ SERVICES_TO_STOP=(
 
 # Enable globbing for hidden files (dotglob) and handle empty matches (nullglob)
 shopt -s dotglob nullglob
- 
+
 SYSTEM_DIRECTORIES=("/etc")
 WEB_DIRECTORIES=()
 MAIL_DIRECTORIES=()
@@ -148,7 +148,7 @@ if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
 			WEB_DIRECTORIES+=("$path")
 		fi
 	done
- 
+
 	if [[ -d "$VAR_DIR/$WWW_DIR/$CLIENTS_DIR" ]]; then
 		for client_path in "$VAR_DIR/$WWW_DIR/$CLIENTS_DIR"/*; do
 			# If it's a directory, add its children (websites)
@@ -176,7 +176,7 @@ fi
 
 shopt -u dotglob nullglob
 
-me=$(basename $0)
+me=$(basename "$0")
 headline="
 ---------------------=== The backup-restore-zstd script by giuseppe.benigno@gmail.com ===---------------------
 "
@@ -223,30 +223,30 @@ backup () {
 
 	function log {
 		NOW=$(date "+%Y-%m-%d %H:%M:%S")		# I like this type of date. Syslog type doesn't use the year.
-		if [ -e $LOG_FILE ]; then
-			echo "$NOW - $(basename $0) - $1" >> $LOG_FILE
-			echo "$NOW - $(basename $0) - $1" >> $TMP_DIR/maildata
+		if [ -e "$LOG_FILE" ]; then
+			echo "$NOW - $(basename $0) - $1" >> "$LOG_FILE"
+			echo "$NOW - $(basename $0) - $1" >> "$TMP_DIR/maildata"
 		else
-			if [ ! -d $BACKUP_DIR/$MONTH_DATE/log ]; then
-				mkdir -p $BACKUP_DIR/$MONTH_DATE/log
+			if [ ! -d "$BACKUP_DIR/$MONTH_DATE/log" ]; then
+				mkdir -p "$BACKUP_DIR/$MONTH_DATE/log"
 				if [ -n "${log1:-}" ]; then
-					echo "${log1}" >> $LOG_FILE
-					echo "${log1}" >> $TMP_DIR/maildata
+					echo "${log1}" >> "$LOG_FILE"
+					echo "${log1}" >> "$TMP_DIR/maildata"
 				fi
-				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $LOG_FILE
-				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> $TMP_DIR/maildata
+				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> "$LOG_FILE"
+				echo "$NOW - $(basename $0) - First run: monthly log dir and log file created." >> "$TMP_DIR/maildata"
 			else
-				echo "$NOW - $(basename $0) - Log file created." >> $LOG_FILE
-				echo "$NOW - $(basename $0) - Log file created." >> $TMP_DIR/maildata
+				echo "$NOW - $(basename $0) - Log file created." >> "$LOG_FILE"
+				echo "$NOW - $(basename $0) - Log file created." >> "$TMP_DIR/maildata"
 			fi
-				echo "$NOW - $(basename $0) - $1" >> $LOG_FILE
-				echo "$NOW - $(basename $0) - $1" >> $TMP_DIR/maildata
+				echo "$NOW - $(basename $0) - $1" >> "$LOG_FILE"
+				echo "$NOW - $(basename $0) - $1" >> "$TMP_DIR/maildata"
 		fi
 	}
 
 	function check_mdir {
 		log "Checking if month dirs exist: $BACKUP_DIR/$MONTH_DATE"
-		mkdir -p $BACKUP_DIR/$MONTH_DATE/{db,web,mail,system,log}
+		mkdir -p "$BACKUP_DIR/$MONTH_DATE"/{db,web,mail,system,log}
 		log "Month subdirs (db, web, mail, system, log) ensured"
 	}
 
@@ -261,19 +261,19 @@ backup () {
 	}
 
 	function del_old_files {
-		to_del=$(ls -ctF $BACKUP_DIR | tail -n 1 | sed 's/\///g') # sort files in ctime order and select the first modified
+		to_del=$(ls -ctF "$BACKUP_DIR" | tail -n 1 | sed 's/\///g') # sort files in ctime order and select the first modified
 		#if [ -d "$BACKUP_DIR/$to_del" ]; then
 		#    # recover db backups and store only the ones from de first day of month or from the first full backup of dirs
 		#    # list all db backups in month dir, extract first date
-		#    day=$(ls -ct $BACKUP_DIR/$to_del | tail -n 1 | cut -d "-" -f 5 | cut -d "." -f 1)
+		#    day=$(ls -ct "$BACKUP_DIR/$to_del" | tail -n 1 | cut -d "-" -f 5 | cut -d "." -f 1)
 		#    # then list all db file names
-		#    dblist=$(ls -ct $BACKUP_DIR/$to_del | grep $to_del-$day)
+		#    dblist=$(ls -ct "$BACKUP_DIR/$to_del" | grep "$to_del-$day")
 		#    for db in $dblist; do
-		#	 mv $BACKUP_DIR/$to_del/$db $BACKUP_DIR/$db	# moving files keeps creation date
+		#	 mv "$BACKUP_DIR/$to_del/$db" "$BACKUP_DIR/$db"	# moving files keeps creation date
 		#    done
 		#	log "Kept db's from $to_del-$day"
 		#else
-			rm -rf $BACKUP_DIR/$to_del
+			rm -rf "$BACKUP_DIR/$to_del"
 			log "Deleted old: $BACKUP_DIR/$to_del"
 			count=0
 			while [ $count -lt 3 ]; do
@@ -287,7 +287,7 @@ backup () {
 	#PERCENT_OF_USED_DISK="95" # for test
 	function check_space {
 		#PERCENT_OF_USED_DISK=$((PERCENT_OF_USED_DISK-1)) # for test
-		PERCENT_OF_USED_DISK=$(df -h $BACKUP_DIR | awk 'NR==2{print $5}' | cut -d% -f 1)
+		PERCENT_OF_USED_DISK=$(df -h "$BACKUP_DIR" | awk 'NR==2{print $5}' | cut -d% -f 1)
 		#PERCENT_OF_USED_DISK="90"
 
 		if [ "$PERCENT_OF_USED_DISK" -gt "$MAX_PERCENT_OF_USED_SPACE" ];then
@@ -297,7 +297,7 @@ backup () {
 			else
 				log "No free space and DELETE_OLD=$DELETE_OLD so we abort here and send mail to $EMAIL_TO"
 				if [ -n "${MAIL}" ]; then
-					${MAIL} -s "Daily backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+					${MAIL} -s "Daily backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
 				fi
 				exit
 			fi
@@ -332,19 +332,18 @@ backup () {
 			fi
 
 			log "Starting mysqldump $i"
-			$(mysqldump -u"$DB_USER" -p"$DB_PASSWORD" "$i" --allow-keywords --comments=false --routines --triggers --add-drop-table > "$TMP_DIR/db-$i-$FULL_DATE.sql")
-			# Modified to use array for arguments and support splitting
+			mysqldump -u"$DB_USER" -p"$DB_PASSWORD" "$i" --allow-keywords --comments=false --routines --triggers --add-drop-table > "$TMP_DIR/db-$i-$FULL_DATE.sql"
 			if [ -n "$SPLIT_SIZE" ]; then
 				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				mkdir -p "$B_DIR"
 				# We pipe tar to split. Tar writes to stdout (-f -)
-				if nice -n 19 $TAR -c -I "zstd -T$THREADS" -P -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
+				if nice -n 19 "$TAR" -c -I "zstd -T$THREADS" -P -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
 					log "Dump OK. $i database saved OK! (Split)"
 				else
 					log "Error splitting database backup for $i"
 				fi
 			else
-				nice -n 19 $TAR -c -I "zstd -T$THREADS" -P -f "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT" -C "$TMP_DIR" "db-$i-$FULL_DATE.sql"
+				nice -n 19 "$TAR" -c -I "zstd -T$THREADS" -P -f "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT" -C "$TMP_DIR" "db-$i-$FULL_DATE.sql"
 				log "Dump OK. $i database saved OK!"
 			fi
 			rm -rf "$TMP_DIR/db-$i-$FULL_DATE.sql"
@@ -399,7 +398,7 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 $TAR -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | $COMPRESSION_TOOL -T$THREADS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" -T$THREADS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
 					RET=$?
 					if [ $RET -le 1 ]; then
 						mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
@@ -413,7 +412,7 @@ backup () {
 				rm -f "$BACKUP_FILE.part"
  
 				if [ ! -f "$BACKUP_FILE" ]; then
-					ionice -c3 nice -n 19 $TAR -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | $COMPRESSION_TOOL -T$THREADS > "$BACKUP_FILE.part"
+					ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" -T$THREADS > "$BACKUP_FILE.part"
 					RET=$?
 					if [ $RET -le 1 ]; then
 						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
@@ -434,7 +433,7 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 $TAR -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | $COMPRESSION_TOOL -T$THREADS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" -T$THREADS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
@@ -448,7 +447,7 @@ backup () {
 					rm -f "$BACKUP_FILE.part"
  
 					if [ ! -f "$BACKUP_FILE" ]; then
-						ionice -c3 nice -n 19 $TAR -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | $COMPRESSION_TOOL -T$THREADS > "$BACKUP_FILE.part"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" -T$THREADS > "$BACKUP_FILE.part"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
@@ -468,7 +467,7 @@ backup () {
 		done
 
 		# Clean temp dir
-		rm -rf $TMP_DIR/excluded
+		rm -rf "$TMP_DIR/excluded"
 	}
 
 	function reboot_system {
@@ -491,14 +490,14 @@ backup () {
 	MAIL=$(which mail)
 	if [ -n "${MAIL}" ]; then
 		SUBJECT="Backup of $COMPUTER STARTED $(date +'%F')"
-		echo "Backup started at $(date '+%Y-%m-%d %H:%M:%S')" | ${MAIL} -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO"
+		echo "Backup started at $(date '+%Y-%m-%d %H:%M:%S')" | "$MAIL" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO"
 	fi
 
-	rm -f $TMP_DIR/maildata
-	if [ -d $BACKUP_DIR ]; then
+	rm -f "$TMP_DIR/maildata"
+	if [ -d "$BACKUP_DIR" ]; then
 		check_space
 	else
-		mkdir -p $BACKUP_DIR
+		mkdir -p "$BACKUP_DIR"
 		log "$(basename $0) - First run: primary dir $BACKUP_DIR created."
 	fi
 
@@ -530,15 +529,15 @@ backup () {
 	# Convert seconds to HH:MM:SS
 	FORMATTED_TIME=$(date -u -d @"${RUN_TIME}" +'%H:%M:%S')
 	log "Run time: ${FORMATTED_TIME} (${RUN_TIME}s)"
-	
+
 	# Calculate sizes
 	FULL_SIZE="0"
-	# Search for full backups in the files subfolder of the current month
-	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE/files"/full* 2>/dev/null | tail -n1 | awk '{print $1}')
+	# Search for full backups in the subfolders of the current month
+	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE"/{web,system,mail}/full* 2>/dev/null | tail -n1 | awk '{print $1}')
 	if [ -n "$FULL_CHECK" ]; then
 		FULL_SIZE=$FULL_CHECK
 	fi
- 
+
 	INCR_SIZE="0"
 	if [ -d "$BACKUP_DIR/$MONTH_DATE" ]; then
 		INCR_SIZE=$(du -sh "$BACKUP_DIR/$MONTH_DATE" | awk '{print $1}')
@@ -553,7 +552,7 @@ backup () {
 		SUBJECT="Backup of $COMPUTER $(date +'%F')"
 # 		MESSAGE="Hello"
 # 		echo "${MESSAGE}" | mail -s "${SUBJECT}" "$EMAIL_FROM" "$EMAIL_TO"
-		${MAIL} -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+		"$MAIL" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
 	else
 		log "I can't send alert because I can't find mail software!"
 	fi
@@ -566,8 +565,7 @@ backup () {
 restore() {
 	del_res() {
 		# We now need to remove the newer files created after the restored backup date.
-		to_rem=$(find $path/$2 -newer $TMP_DIR/dateend)
-		echo -en "\n$headline\n    For a clean backup restored at $3 we need now to delete the files\ncreated after the backup date.\n    If exists, a list of files to be deleted follows:\n\n"
+		to_rem=$(find "$path/$2" -newer "$TMP_DIR/dateend")
 		echo -en "\n$headline\n    For a clean backup restored at $3 we need now to delete the files\ncreated after the backup date.\n    If exists, a list of files to be deleted follows:\n\n"
 		while IFS= read -r a; do
 			echo -e "To be removed: $a"
@@ -591,30 +589,31 @@ restore() {
 	fi
 
 	RDATE=$3
-	DAY_OF_MONTH=$(echo $RDATE | cut -d "-" -f3)		# Date of the Month eg. 27
-	MONTH_DATE=$(echo $RDATE | cut -d "-" -f2)
-	YDATE=$(echo $RDATE | cut -d "-" -f1)
+	DAY_OF_MONTH=$(echo "$RDATE" | cut -d "-" -f3)		# Date of the Month eg. 27
+	MONTH_DATE=$(echo "$RDATE" | cut -d "-" -f2)
+	YDATE=$(echo "$RDATE" | cut -d "-" -f1)
 
 	type=$1
-	dir=$(echo $2 | awk '{gsub("/", "_", $0); print}')
+	dir=$(echo "$2" | awk '{gsub("/", "_", $0); print}')
 
 	if [ -z "$3" ]; then
 		print_usage
 		exit
 	fi
 
+	# poor date input verification: ${#RDATE} is 10 for a correct date 2009-01-30
 	# find the first possible restore date=day
-		# Updated to search in subdirectories (files subfolder)
-		first_backup=$(find "$BACKUP_DIR" -maxdepth 2 -name "full*-*" 2>/dev/null | sort | head -n 1)
-		if [ -n "$first_backup" ]; then
-			year=$(echo $(basename "$first_backup") | cut -d "-" -f 2)
-			md=$(echo $(basename "$first_backup") | cut -d "-" -f 3)
-			day=$(echo $(basename "$first_backup") | cut -d "-" -f 4 | cut -d "." -f 1)
-			resdate=$year$md$day
-		else
-			# Fallback if no backup found
-			resdate=$(date +%Y%m%d)
-		fi
+	# Updated to search in subdirectories
+	first_backup=$(find "$BACKUP_DIR" -maxdepth 2 -name "full*-*" 2>/dev/null | sort | head -n 1)
+	if [ -n "$first_backup" ]; then
+		year=$(echo "$(basename "$first_backup")" | cut -d "-" -f 2)
+		md=$(echo "$(basename "$first_backup")" | cut -d "-" -f 3)
+		day=$(echo "$(basename "$first_backup")" | cut -d "-" -f 4 | cut -d "." -f 1)
+		resdate=$year$md$day
+	else
+		# Fallback if no backup found
+		resdate=$(date +%Y%m%d)
+	fi
 
 	dh="1234"
 	err=$(touch -t $YDATE$MONTH_DATE$DAY_OF_MONTH$dh $TMP_DIR/datestart 2>&1)
@@ -669,7 +668,7 @@ restore() {
 				sleep 5 # We wait 5 secs for the user to see what's happening.
 			else
 				# We suppose the user uses /dir
-				if [[ "${DIRECTORIES[*]} all" =~ "$2" ]]; then
+				if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} all" =~ "$2" ]]; then
 					echo -en "\nTrying to restore $2 dir's backup from date $3 to $path:\n\n"
 					# we say "trying" because if the requested dir is "al" it matches!
 					sleep 5
@@ -706,7 +705,7 @@ restore() {
 			[ -d "$B_MAIL" ] && B_SEARCH_DIRS+=("$B_MAIL")
 			[ -d "$B_SYSTEM" ] && B_SEARCH_DIRS+=("$B_SYSTEM")
 
-			if [ $dir = "all" ]; then
+			if [ "$dir" = "all" ]; then
 				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full_)
 				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -vE "/(db-|log/)")
 			else
@@ -726,8 +725,8 @@ restore() {
 					$TAR $EXTRACT_ARGS "$f_path" -C "$path" &>/dev/null
 				fi
 				# if the day is 01 the the full backup is recovered so we need to clean newer files created after the backup date.
-				if [ $DAY_OF_MONTH = "01" ]; then
-					del_res $path $2 $3 $TMP_DIR
+				if [ "$DAY_OF_MONTH" = "01" ]; then
+					del_res "$path" "$2" "$3" "$TMP_DIR"
 				fi
 			done
 			for i_path in $arh; do
@@ -742,7 +741,7 @@ restore() {
 					$TAR $EXTRACT_ARGS "$i_path" -C "$path" &>/dev/null
 				fi
 			done
-			del_res $path $2 $3 $TMP_DIR
+			del_res "$path" "$2" "$3" "$TMP_DIR"
 		else
 			mesaj="Invalid directory to restore!"
 		fi
@@ -750,16 +749,16 @@ restore() {
 		db=$2
 		# here we build the db list to restore from the files we backed up before in the day requested
 		DB_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/db"
-		dblist=$(find  "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | cut -d "-" -f2)
+		dblist=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | cut -d "-" -f2)
 		dblist="$dblist all"
 		#echo $dblist
 		for d in $dblist; do
 			if [ "$d" == "$2" ]; then
 				if [ "$db" = "all" ]; then
 					# get db list from backup and restore all db's
-					arh=$(find  "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				else
-					arh=$(find  "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep "$db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep "$db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				fi
 				for i in $arh; do
 					rdb=$(echo $i | cut -d "-" -f2)
@@ -789,12 +788,12 @@ restore() {
 
 	# Send accumulated maildata an cleanup
 	if [ -n "${MAIL}" ]; then
-		${MAIL} -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < $TMP_DIR/maildata
+		${MAIL} -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
 	fi
-	rm -rf $TMP_DIR/datestart
-	rm -rf $TMP_DIR/dateend
-	rm -rf $TMP_DIR/excluded
-	rm -rf $TMP_DIR/maildata
+	rm -rf "$TMP_DIR/datestart"
+	rm -rf "$TMP_DIR/dateend"
+	rm -rf "$TMP_DIR/excluded"
+	rm -rf "$TMP_DIR/maildata"
 }
 
 case "${1:-}" in

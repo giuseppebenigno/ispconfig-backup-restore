@@ -1,5 +1,13 @@
 # Changelog
 
+## version 0.23.0 - 2026-02-09 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Improved: Standardized variable quoting across both scripts to ensure robustness with paths containing spaces or special characters.
+- Improved: Achieved 100% logic and comment parity between `backup-restore-gz.sh` and `backup-restore-zstd.sh`.
+- Fix: Resolved outdated variable reference in `restore` function of the `zstd` script.
+- Fix: Corrected command substitution bug in `mysqldump` calls.
+- Fix: Removed redundant duplicated lines and cleaned up script logic.
+
 ## version 0.22.2 - 2026-02-08 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
 - Added: Check for existing backups for the current day in `dirs_backup`. If a backup (full or incremental) already exists for today, it will be skipped to save time and resources.
