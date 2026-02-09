@@ -1,10 +1,10 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.23.0"
+version="0.23.2"
 # CHANGELOG: see CHANGELOG.md
 #
-# Copyright (c) giuseppe.benigno@gmail.com
+# Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
 #
 # DESCRIPTION: see README.md
 
@@ -33,16 +33,24 @@ EMAIL_FROM="$(hostname)@$(hostname -d)"
 EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
 
+# --- COMPRESSION CONFIGURATION ---
+# Calculate threads: 4/5 of available cores
+TOTAL_CORES=$(nproc)
+THREADS=$(( TOTAL_CORES * 4 / 5 ))
+if [ "$THREADS" -lt 1 ]; then THREADS=1; fi
+
 # Check for pigz, fallback to gzip
 if which pigz > /dev/null; then
 	COMPRESSION_TOOL="pigz"
 	COMPRESSION_EXT=".tar.gz"
-	COMPRESS_ARGS="-cpSP -I pigz -f"
+	# -p flag for pigz sets the number of threads
+	COMPRESS_ARGS="-T$THREADS" # Used when COMPRESSION_TOOL is part of a pipe
 else
 	COMPRESSION_TOOL="gzip"
 	COMPRESSION_EXT=".tar.gz"
-	COMPRESS_ARGS="-czpSPf"
+	COMPRESS_ARGS="" 
 fi
+# --- END COMPRESSION CONFIGURATION ---
 
 
 # --- SPLIT CONFIGURATION ---
@@ -337,13 +345,13 @@ backup () {
 				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				mkdir -p "$B_DIR"
 				# We pipe tar to split. Tar writes to stdout (-f -)
-				if nice -n 19 "$TAR" -czpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
+				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
 					log "Dump OK. $i database saved OK! (Split)"
 				else
 					log "Error splitting database backup for $i"
 				fi
 			else
-				nice -n 19 "$TAR" $COMPRESS_ARGS "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT" -C "$TMP_DIR" "db-$i-$FULL_DATE.sql"
+				nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT"
 				log "Dump OK. $i database saved OK!"
 			fi
 			rm -rf "$TMP_DIR/db-$i-$FULL_DATE.sql"
@@ -398,7 +406,7 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 "$TAR" -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
 					RET=$?
 					if [ $RET -le 1 ]; then
 						mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
@@ -412,7 +420,7 @@ backup () {
 				rm -f "$BACKUP_FILE.part"
  
 				if [ ! -f "$BACKUP_FILE" ]; then
-					ionice -c3 nice -n 19 "$TAR" $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"
+					ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_FILE.part"
 					RET=$?
 					if [ $RET -le 1 ]; then
 						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
@@ -433,7 +441,7 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 "$TAR" -czpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
@@ -447,7 +455,7 @@ backup () {
 					rm -f "$BACKUP_FILE.part"
  
 					if [ ! -f "$BACKUP_FILE" ]; then
-						ionice -c3 nice -n 19 "$TAR" $NEWER $COMPRESS_ARGS "$BACKUP_FILE.part" -X "$TMP_DIR/excluded" "$TARGET_DIR"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_FILE.part"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"

@@ -129,4 +129,4 @@ tar --zstd -xOf db-name-date.tar.zst | mysql -u user -p db_name
 ```
 
 ---
-*Copyright (c) <giuseppe.benigno@gmail.com>*
+*Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>*

@@ -1,5 +1,16 @@
 # Changelog
 
+## version 0.23.2 - 2026-02-09 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- Improved: Standardized copyright headers with full name and email in all scripts and README.
+- Fix: Unified versioning and documentation for the latest release.
+
+## version 0.23.1 - 2026-02-09 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
+
+- Improved: Added explicit thread control for `pigz` in `backup-restore-gz.sh` (using 4/5 of available cores) to prevent server performance degradation.
+- Improved: Standardized compression architecture across both scripts using piped syntax (`tar | compression`).
+- Improved: Unified documentation and versioning across the project.
+
 ## version 0.23.0 - 2026-02-09 (by Giuseppe Benigno <giuseppe.benigno AT gmail.com>)
 
 - Improved: Standardized variable quoting across both scripts to ensure robustness with paths containing spaces or special characters.
