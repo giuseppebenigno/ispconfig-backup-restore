@@ -10,8 +10,9 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Automatic Exclusions**: Skips `**/tmp/*` (Maildir) and common socket/lock files.
 - **Email Notifications**: Alerts sent at the start and end of the backup process.
 - **Database Optimization**: Automatic repair and optimization of all MySQL databases before dumping.
-- **Compression**: Choose between `gzip` (via `pigz` if available) or `zstd` versions.
-- **Duplicate Prevention**: Automatically skips backups if they already exist for the current day to save time and resources.
+- **Compression**: Choose between `gzip` or `zstd` versions.
+- **Parallel Processing**: Automatically uses 4/5 of available CPU cores for `zstd` and `gzip` (only if `pigz` is installed). Regular `gzip` remains single-threaded.
+- **Duplicate Prevention**: Automatically skips backups if they already exist for the current day.
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 
