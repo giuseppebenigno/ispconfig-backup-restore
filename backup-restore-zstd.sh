@@ -186,7 +186,7 @@ shopt -u dotglob nullglob
 
 me=$(basename "$0")
 headline="
----------------------=== The backup-restore-zstd script by giuseppe.benigno@gmail.com ===---------------------
+---------------------=== The backup-restore-zstd script by Giuseppe Benigno <giuseppe.benigno@gmail.com> ===---------------------
 "
 print_usage() {
 	echo "$headline"
