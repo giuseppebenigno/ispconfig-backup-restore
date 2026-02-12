@@ -1,5 +1,10 @@
 # Changelog
 
+## version 0.23.3 - 2026-02-12 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- Improved: Reduced CPU usage by changing thread calculation from 4/5 to 2/3 of available cores in both scripts.
+- Improved: Better system resource management during backup operations, leaving more CPU capacity for other processes.
+
 ## version 0.23.2 - 2026-02-09 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - Improved: Standardized copyright headers with full name and email in all scripts and README.

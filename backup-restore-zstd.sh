@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.23.2"
+version="0.23.3"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -34,9 +34,9 @@ EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
 
 # --- COMPRESSION CONFIGURATION ---
-# Calculate threads: 4/5 of available cores
+# Calculate threads: 2/3 of available cores
 TOTAL_CORES=$(nproc)
-THREADS=$(( TOTAL_CORES * 4 / 5 ))
+THREADS=$(( TOTAL_CORES * 2 / 3 ))
 if [ "$THREADS" -lt 1 ]; then THREADS=1; fi
 
 COMPRESSION_TOOL="zstd"
