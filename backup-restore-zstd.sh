@@ -74,16 +74,8 @@ EXCLUDED="
 	*.pid
 	*.sock
 	**/tmp/*
-	/dev
-	/lib/init/rw
-	/media
-	/proc
-	/srv
-	/sys
-	/tmp
 	/var/adm
 	/var/amavis
-	$BACKUP_ROOT_DIR
 	/var/cache
 	/var/crash
 	/var/lib/amavis

@@ -20,6 +20,18 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Per-Resource Isolation (v0.25.0+)**: Groups all backups for a single resource (website, DB, or mail) into its own subfolder.
 - **Granular Portability**: Easily extract and deliver backups for a single site or database to clients without searching through hundreds of files.
 - **Improved Organization**: Drastically reduced clutter in monthly directories by categorizing and nesting backups.
+- **Granular Control**: Precision toggles for selective backups of databases, websites, mail, or system files.
+
+## Backup Categories
+
+The script categorizes backups into four main groups, which can be toggled via the `BACKUP_*` variables:
+
+| Category     | Source Paths    | Description                                                                            |
+| :----------- | :-------------- | :------------------------------------------------------------------------------------- |
+| **`DB`**     | MySQL/MariaDB   | All databases except `information_schema` and `performance_schema`.                    |
+| **`WEB`**    | `/var/www`      | Global files in `/var/www` and all ISPConfig sites in `/var/www/clients/clientN/webM`. |
+| **`MAIL`**   | `/var/vmail`    | All mailboxes, domains, and mail configurations.                                       |
+| **`SYSTEM`** | `/etc` & `/var` | System configurations and general `/var` data (excluding web, mail, and backup root).  |
 
 ## Backup Compression Comparison
 
