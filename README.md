@@ -16,6 +16,7 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Low System Impact**: Runs with lowest CPU priority (`nice -n 19`) and Idle I/O priority (`ionice -c3`) to ensure the server remains responsive during backups.
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
+- **Selective Backup (-o/--only)**: Run only specific components from the command line (e.g., `--only db,mail`).
 - **Per-Resource Isolation (v0.25.0+)**: Groups all backups for a single resource (website, DB, or mail) into its own subfolder.
 - **Granular Portability**: Easily extract and deliver backups for a single site or database to clients without searching through hundreds of files.
 - **Improved Organization**: Drastically reduced clutter in monthly directories by categorizing and nesting backups.
@@ -64,6 +65,21 @@ Backup is designed to be non-interactive and run via cron.
 1. **First run of the month**: A permanent full backup is created.
 2. **Daily runs**: Incremental backups are created based on the date of the full backup.
 3. **Space Management**: If `DELETE_OLD="yes"`, the script automatically deletes the oldest monthly directory when disk usage exceeds `MAX_PERCENT_OF_USED_SPACE`.
+
+### Selective Backup
+
+You can run individual backup tasks by passing the `-o` or `--only` flag:
+
+```bash
+# Run only database backup
+./backup-restore-gz.sh --only db
+
+# Run database and mail backups (comma separated)
+./backup-restore-gz.sh -o db,mail
+
+# Run all (shorthand for default behavior)
+./backup-restore-gz.sh -o all
+```
 
 ### Crontab Example
 

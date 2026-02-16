@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.25.0"
+version="0.25.1"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -195,6 +195,10 @@ print_usage() {
 The backup part requires some configuration in the header of the script
 and it's supposed to be run from cron.
 The restore part it's supposed to be run from command line.
+backup part Usage:
+\t $me
+\t $me -o|--only [db,web,mail,system,all]
+
 restore part Usage:
 \t $me [type-of-restore] [dir|db] [YYYY-MM-DD] [path]
 
@@ -214,9 +218,42 @@ EOF
 }
 
 backup () {
-	if [ -n "$1" ]; then
+	if [ "${1:-}" == "-o" ] || [ "${1:-}" == "--only" ]; then
+		if [ -z "${2:-}" ]; then
+			echo "Error: -o|--only requires an argument (db,web,mail,system,all)"
+			print_usage
+			exit 1
+		fi
+
+		# Disable all by default when --only is used
+		BACKUP_DB="no"
+		BACKUP_WEB="no"
+		BACKUP_MAIL="no"
+		BACKUP_SYSTEM="no"
+
+		IFS=',' read -ra ADDR <<< "$2"
+		for component in "${ADDR[@]}"; do
+			case "$component" in
+				db) BACKUP_DB="yes" ;;
+				web) BACKUP_WEB="yes" ;;
+				mail) BACKUP_MAIL="yes" ;;
+				system) BACKUP_SYSTEM="yes" ;;
+				all)
+					BACKUP_DB="yes"
+					BACKUP_WEB="yes"
+					BACKUP_MAIL="yes"
+					BACKUP_SYSTEM="yes"
+					;;
+				*)
+					echo "Error: Invalid component '$component'"
+					print_usage
+					exit 1
+					;;
+			esac
+		done
+	elif [ -n "${1:-}" ]; then
 		print_usage
-		exit
+		exit 1
 	fi
 
 
@@ -821,6 +858,6 @@ db)
 	restore "${1:-}" "${2:-}" "${3:-}" "${4:-}"
 	;;
 *)
-	backup "${1:-}"
+	backup "$@"
 	exit 1
 esac

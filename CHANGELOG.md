@@ -1,5 +1,12 @@
 # Changelog
 
+## version 0.25.1 - 2026-02-16 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **New Feature: Selective Component Backups**: Introduced the `-o` / `--only` flag to allow running backups for specific components only.
+- **Improved: Flexible Selection**: Support for comma-separated component lists (e.g., `--only db,mail`).
+- **Improved: Interactive Help**: Updated usage information to document the new selective backup options.
+- **Improved: Compatibility**: Maintained full backward compatibility for automatic cron jobs (no-argument runs).
+
 ## version 0.25.0 - 2026-02-16 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **Major Feature: Per-Resource Directory Structure**: Refactored the entire backup organization to group all files for a single resource (website, database, or mail) into dedicated subfolders.
