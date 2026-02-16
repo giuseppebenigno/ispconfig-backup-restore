@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.24.0"
+version="0.25.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -32,6 +32,7 @@ DB_PASSWORD=$(cat /usr/local/ispconfig/server/lib/mysql_clientdb.conf | grep '$c
 EMAIL_FROM="$(hostname)@$(hostname -d)"
 EMAIL_TO=root		# mail for the responsible person
 TAR=$(which tar)						# name and location of tar
+MAIL_BIN=$(which mail)					# name and location of mail
 
 # --- COMPRESSION CONFIGURATION ---
 # Calculate threads: 2/3 of available cores
@@ -324,15 +325,18 @@ backup () {
 		mysqlcheck -u$DB_USER -p$DB_PASSWORD --all-databases --optimize --auto-repair --silent 2>&1
 		### Starting database dumps
 		for i in $(mysql -u"$DB_USER" -p"$DB_PASSWORD" -Bse 'show databases' | grep -Ev "^(information_schema|performance_schema)$"); do
+			# Target subfolder for this database
+			B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i"
+			
 			# Check if backup already exists for today
 			if [ -n "$SPLIT_SIZE" ]; then
-				B_TARGET="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
+				B_TARGET="$B_DIR/db-$i-$FULL_DATE"
 				if [ -d "$B_TARGET" ]; then
 					log "Database $i already backed up (split) for $FULL_DATE. Skipping."
 					continue
 				fi
 			else
-				B_TARGET="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT"
+				B_TARGET="$B_DIR/db-$i-$FULL_DATE$COMPRESSION_EXT"
 				if [ -f "$B_TARGET" ]; then
 					log "Database $i already backed up for $FULL_DATE. Skipping."
 					continue
@@ -341,17 +345,20 @@ backup () {
 
 			log "Starting mysqldump $i"
 			mysqldump -u"$DB_USER" -p"$DB_PASSWORD" "$i" --allow-keywords --comments=false --routines --triggers --add-drop-table > "$TMP_DIR/db-$i-$FULL_DATE.sql"
+			
+			mkdir -p "$B_DIR"
 			if [ -n "$SPLIT_SIZE" ]; then
-				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
-				mkdir -p "$B_DIR"
+				rm -rf "$B_TARGET.part"
+				mkdir -p "$B_TARGET.part"
 				# We pipe tar to split. Tar writes to stdout (-f -)
-				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$B_DIR/part-"; then
+				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$B_TARGET.part/part-"; then
+					mv "$B_TARGET.part" "$B_TARGET"
 					log "Dump OK. $i database saved OK! (Split)"
 				else
 					log "Error splitting database backup for $i"
 				fi
 			else
-				nice -n 19 "$TAR" -c -I "zstd -T$THREADS" -P -f "$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE$COMPRESSION_EXT" -C "$TMP_DIR" "db-$i-$FULL_DATE.sql"
+				nice -n 19 "$TAR" -c -I "zstd -T$THREADS" -P -f "$B_TARGET" -C "$TMP_DIR" "db-$i-$FULL_DATE.sql"
 				log "Dump OK. $i database saved OK!"
 			fi
 			rm -rf "$TMP_DIR/db-$i-$FULL_DATE.sql"
@@ -375,24 +382,12 @@ backup () {
 		for i in "${targets[@]}"; do
 			UNDERSCORED_DIR=$(echo "$i" | awk '{gsub("/", "_", $0); print}')
 			TARGET_DIR="$i"
+			# Resource-specific subfolder within the monthly directory
+			RES_DIR="$BACKUP_DIR/$MONTH_DATE/$subfolder/$UNDERSCORED_DIR"
 
-			# Check if any backup for today already exists
-			if [ -n "$SPLIT_SIZE" ]; then
-				if [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE" ] || \
-				   [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE" ]; then
-					log "Backup for $TARGET_DIR already exists (split) for $FULL_DATE. Skipping."
-					continue
-				fi
-			else
-				if [ -f "$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT" ] || \
-				   [ -f "$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT" ]; then
-					log "Backup for $TARGET_DIR already exists for $FULL_DATE. Skipping."
-					continue
-				fi
-			fi
 
-			# Check for monthly full backup in the monthly target directory
-			FULL_BACKUP_FILE=$(ls "$BACKUP_DIR/$MONTH_DATE/$subfolder" 2>/dev/null | grep ^full$UNDERSCORED_DIR-${MONTH_DATE}-)
+			# Check for monthly full backup in the resource subfolder
+			FULL_BACKUP_FILE=$(ls "$RES_DIR" 2>/dev/null | grep "^full-${MONTH_DATE}-")
 
 			if [ -z "$FULL_BACKUP_FILE" ]; then
 				# Monthly full backup
@@ -401,8 +396,9 @@ backup () {
 				echo "$TARGET_DIR"
 				NEWER=""
 				
+				mkdir -p "$RES_DIR"
 				if [ -n "$SPLIT_SIZE" ]; then
-					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE"
+					BACKUP_DIR_NAME="$RES_DIR/full-$FULL_DATE"
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
@@ -415,56 +411,57 @@ backup () {
 							log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
 						fi
 					fi
-			else
-				BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
-				rm -f "$BACKUP_FILE.part"
- 
-				if [ ! -f "$BACKUP_FILE" ]; then
-					ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_FILE.part"
-					RET=$?
-					if [ $RET -le 1 ]; then
-						mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-						[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
-					else
-						log "Error backing up $TARGET_DIR - Exit code: $RET"
-					fi
-				fi
-			fi
-		else
-			# If there is already a full backup for this month, let's do the incremental backup
-			if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
-				log "Starting incremental backup for: $TARGET_DIR"
-				echo "$TARGET_DIR"
-				NEWER="--newer $FULL_DATE"
-				if [ -n "$SPLIT_SIZE" ]; then
-					BACKUP_DIR_NAME="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE"
-					if [ ! -d "$BACKUP_DIR_NAME" ]; then
-						rm -rf "$BACKUP_DIR_NAME.part"
-						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$BACKUP_DIR_NAME.part/part-"
-						RET=$?
-						if [ $RET -le 1 ]; then
-							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-							[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
-						else
-							log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
-						fi
-					fi
 				else
-					BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
+					BACKUP_FILE="$RES_DIR/full-$FULL_DATE$COMPRESSION_EXT"
 					rm -f "$BACKUP_FILE.part"
- 
+	 
 					if [ ! -f "$BACKUP_FILE" ]; then
 						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_FILE.part"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
-							[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Incremental backup for $TARGET_DIR done (to $subfolder)."
+							[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
 						else
 							log "Error backing up $TARGET_DIR - Exit code: $RET"
 						fi
 					fi
 				fi
+			else
+				# If there is already a full backup for this month, let's do the incremental backup
+				if [ ! -e "$TMP_DIR/full-backup$UNDERSCORED_DIR.lck" ]; then
+					log "Starting incremental backup for: $TARGET_DIR"
+					echo "$TARGET_DIR"
+					NEWER="--newer $FULL_DATE"
+					mkdir -p "$RES_DIR"
+					if [ -n "$SPLIT_SIZE" ]; then
+						BACKUP_DIR_NAME="$RES_DIR/i-$FULL_DATE"
+						if [ ! -d "$BACKUP_DIR_NAME" ]; then
+							rm -rf "$BACKUP_DIR_NAME.part"
+							mkdir -p "$BACKUP_DIR_NAME.part"
+							ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$BACKUP_DIR_NAME.part/part-"
+							RET=$?
+							if [ $RET -le 1 ]; then
+								mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+								[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
+							else
+								log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
+							fi
+						fi
+					else
+						BACKUP_FILE="$RES_DIR/i-$FULL_DATE$COMPRESSION_EXT"
+						rm -f "$BACKUP_FILE.part"
+	 
+						if [ ! -f "$BACKUP_FILE" ]; then
+							ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$BACKUP_FILE.part"
+							RET=$?
+							if [ $RET -le 1 ]; then
+								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+								[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Incremental backup for $TARGET_DIR done (to $subfolder)."
+							else
+								log "Error backing up $TARGET_DIR - Exit code: $RET"
+							fi
+						fi
+					fi
 				else
 					log "Lock file for $TARGET_DIR full backup exists!"
 				fi
@@ -491,14 +488,10 @@ backup () {
 		reboot
 	}
 
-	#############
-	### START ###
-	#############
 	START=$(date +%s)
-	MAIL=$(which mail)
-	if [ -n "${MAIL}" ]; then
+	if [ -n "${MAIL_BIN}" ]; then
 		SUBJECT="Backup of $COMPUTER STARTED $(date +'%F')"
-		echo "Backup started at $(date '+%Y-%m-%d %H:%M:%S')" | "$MAIL" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO"
+		echo "Backup started at $(date '+%Y-%m-%d %H:%M:%S')" | "$MAIL_BIN" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO"
 	fi
 
 	rm -f "$TMP_DIR/maildata"
@@ -556,11 +549,11 @@ backup () {
 
 	log "Stats for $MONTH_DATE | Full: $FULL_SIZE | Incr/DB/Log: $INCR_SIZE | Free: $AVAIL_SPACE"
 
-	if [ -n "${MAIL}" ]; then
+	if [ -n "${MAIL_BIN}" ]; then
 		SUBJECT="Backup of $COMPUTER $(date +'%F')"
 # 		MESSAGE="Hello"
 # 		echo "${MESSAGE}" | mail -s "${SUBJECT}" "$EMAIL_FROM" "$EMAIL_TO"
-		"$MAIL" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
+		"$MAIL_BIN" -s "${SUBJECT}" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
 	else
 		log "I can't send alert because I can't find mail software!"
 	fi
@@ -573,7 +566,8 @@ backup () {
 restore() {
 	del_res() {
 		# We now need to remove the newer files created after the restored backup date.
-		to_rem=$(find "$path/$2" -newer "$TMP_DIR/dateend")
+		# Strip leading slash from $2 for find to work with extracted absolute paths
+		to_rem=$(find "$path/${2#/}" -newer "$TMP_DIR/dateend" 2>/dev/null)
 		echo -en "\n$headline\n    For a clean backup restored at $3 we need now to delete the files\ncreated after the backup date.\n    If exists, a list of files to be deleted follows:\n\n"
 		while IFS= read -r a; do
 			echo -e "To be removed: $a"
@@ -595,6 +589,9 @@ restore() {
 	else
 		path=$4					# this is the path where to extract the files
 	fi
+	mesaj=""
+	dblist=""
+	rdb=""
 
 	RDATE=$3
 	DAY_OF_MONTH=$(echo "$RDATE" | cut -d "-" -f3)		# Date of the Month eg. 27
@@ -664,6 +661,11 @@ restore() {
 		fi
 	fi
 
+	if [ "$type" = "db" ]; then
+		DB_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/db"
+		dblist=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | sed 's_.*/__' | cut -d "-" -f2 | sort -u)
+	fi
+
 	# We now prompt the user with the info entered on the comand line.
 	# clear
 	echo -en "\n    You want to restore $1 $2 to date $3.\n\nPlease input \"yes\" if the above is ok with you and press [ENTER]: "
@@ -714,23 +716,23 @@ restore() {
 			[ -d "$B_SYSTEM" ] && B_SEARCH_DIRS+=("$B_SYSTEM")
 
 			if [ "$dir" = "all" ]; then
-				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full_)
-				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -vE "/(db-|log/)")
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full-)
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -v "/full-" | grep -vE "/(db-|log/)")
 			else
-				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "$dir" | grep /full_)
-				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 1 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "$dir" | grep -vE "/(db-|log/)")
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep /full-)
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep -v "/full-" | grep -vE "/(db-|log/)")
 			fi
 
-			# Filter out entries that are not in the top level of our search dirs (to avoid finding files inside parts folders if they weren't sed'd out)
-			# But find with maxdepth 1 already handles this.
+			# Filter out entries that are not in the child level of our resource dirs (to avoid finding files inside parts folders if they weren't sed'd out)
+			# But find with maxdepth 2 already handles this for the monthly root.
 			
 			for f_path in $farh; do
 				f=$(basename "$f_path")
 				echo -en "\tExtracting $f (from $(dirname "$f_path"))...\n\n"
 				if [ -d "$f_path" ]; then
-					cat "$f_path"/part-* | $TAR --zstd $EXTRACT_ARGS - -C "$path" &>/dev/null
+					cat "$f_path"/part-* | $TAR --zstd -x -f - -C "$path"
 				else
-					$TAR $EXTRACT_ARGS "$f_path" -C "$path" &>/dev/null
+					$TAR --zstd -x -f "$f_path" -C "$path"
 				fi
 				# if the day is 01 the the full backup is recovered so we need to clean newer files created after the backup date.
 				if [ "$DAY_OF_MONTH" = "01" ]; then
@@ -738,15 +740,15 @@ restore() {
 				fi
 			done
 			for i_path in $arh; do
-				# Skip full backups as they were already processed
-				[[ "$(basename "$i_path")" =~ ^full_ ]] && continue
+				# Skip full backups as they were already processed (redundant but safe)
+				[[ "$(basename "$i_path")" =~ ^full- ]] && continue
 				
 				i=$(basename "$i_path")
 				echo -en "\tExtracting $i (from $(dirname "$i_path"))...\n\n"
 				if [ -d "$i_path" ]; then
-					cat "$i_path"/part-* | $TAR --zstd $EXTRACT_ARGS - -C "$path" &>/dev/null
+					cat "$i_path"/part-* | $TAR --zstd -x -f - -C "$path"
 				else
-					$TAR $EXTRACT_ARGS "$i_path" -C "$path" &>/dev/null
+					$TAR --zstd -x -f "$i_path" -C "$path"
 				fi
 			done
 			del_res "$path" "$2" "$3" "$TMP_DIR"
@@ -756,25 +758,23 @@ restore() {
 	elif [ "$type" = "db" ]; then
 		db=$2
 		# here we build the db list to restore from the files we backed up before in the day requested
-		DB_ROOT="$BACKUP_DIR/$YDATE-$MONTH_DATE/db"
-		dblist=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | cut -d "-" -f2)
 		dblist="$dblist all"
 		#echo $dblist
 		for d in $dblist; do
-			if [ "$d" == "$2" ]; then
-				if [ "$db" = "all" ]; then
+			if [ "$d" == "$2" ] || [ "$2" == "all" ]; then
+				if [ "$2" = "all" ]; then
 					# get db list from backup and restore all db's
-					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				else
-					arh=$(find "$DB_ROOT" -maxdepth 1 \( -type f -o -type d \) 2>/dev/null | sed 's_.*/__' | grep ^db- | grep "$db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-$db/" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
 				fi
 				for i in $arh; do
-					rdb=$(echo $i | cut -d "-" -f2)
+					rdb=$(basename "$i" | cut -d "-" -f2)
 					mysql --user="$DB_USER" --password="$DB_PASSWORD" --execute "CREATE DATABASE IF NOT EXISTS $rdb;"
-					if [ -d "$DB_ROOT/$i" ]; then
-						cat "$DB_ROOT/$i"/part-* | $TAR --zstd -xOf - | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
+					if [ -d "$i" ]; then
+						cat "$i"/part-* | $TAR --zstd -xOf - | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
 					else
-						$TAR --zstd -xOf "$DB_ROOT/$i" | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
+						$TAR --zstd -xOf "$i" | mysql --user="$DB_USER" --password="$DB_PASSWORD" --database="$rdb"
 					fi
 				done
 				echo -en "All restore jobs done!\nDatabase $2 restored to date $3!\n"
@@ -795,8 +795,8 @@ restore() {
 	fi
 
 	# Send accumulated maildata an cleanup
-	if [ -n "${MAIL}" ]; then
-		${MAIL} -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
+	if [ -n "${MAIL_BIN:-}" ]; then
+		${MAIL_BIN} -s "Backup of $COMPUTER $(date +'%F')" -r "$EMAIL_FROM" "$EMAIL_TO" < "$TMP_DIR/maildata"
 	fi
 	rm -rf "$TMP_DIR/datestart"
 	rm -rf "$TMP_DIR/dateend"

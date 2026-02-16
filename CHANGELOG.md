@@ -1,5 +1,16 @@
 # Changelog
 
+## version 0.25.0 - 2026-02-16 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **Major Feature: Per-Resource Directory Structure**: Refactored the entire backup organization to group all files for a single resource (website, database, or mail) into dedicated subfolders.
+- **Advantage: Granular Portability**: Individual resources can now be easily extracted, zipped, and delivered to clients without affecting other backups.
+- **Advantage: Cleaner Organization**: Categorization into `web/`, `db/`, `mail/`, and `system/` subdirectories significantly reduces clutter in the monthly root.
+- **Improved: Simplified Filenames**: Standardized naming convention as `full-YYYY-MM-DD` and `i-YYYY-MM-DD` within resource folders.
+- **Improved: Robustness**: Fixed multiple "unbound variable" issues ensuring full compatibility with `set -u`.
+- **Improved: Backup Locking**: Refined locking mechanism during split backup creation to ensure directory integrity.
+- **Improved: Database Restore**: Fixed path resolution and database name extraction in the `restore` function for better reliability.
+- **Fix: Double Pathing**: Resolved an issue where the restore function could double-base the path during database extraction.
+
 ## version 0.24.0 - 2026-02-16 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - Added: Compression-specific extensions (`.tar.gz` or `.tar.zst`) to split backup part files for better clarity.
@@ -196,8 +207,8 @@
 
 ## version 0.9.2 - 2010-04-18
 
-- Always download the latest version here: http://www.eurosistems.ro/back-res
-- Thanks or questions: http://www.howtoforge.com/forums/showthread.php?t=41609
+- Always download the latest version here: <http://www.eurosistems.ro/back-res>
+- Thanks or questions: <http://www.howtoforge.com/forums/showthread.php?t=41609>
 
 Fixes:
 
@@ -206,15 +217,15 @@ Fixes:
 - Modified the starting sequence to not check the free space if the primary backup directory does not exist
 - If primary backup dir does not exist now it's created at the start
 - Added a line to remove the maildata at the start if the user stops the script before finishing his jobs. This prevents the script to send incorect mails.
-- Added link http://www.howtoforge.com/forums/showthread.php?t=41609 maybe some of the downloaders will visit the forum.
+- Added link <http://www.howtoforge.com/forums/showthread.php?t=41609> maybe some of the downloaders will visit the forum.
 - Added first TODO
 
 ## beta version 0.9.1 - first public release last modified 2009-12-06
 
-- moved to http://www.eurosistems.ro/back-res.0.9.1
+- moved to <http://www.eurosistems.ro/back-res.0.9.1>
 
-## TODO:
+## TODO
 
 - Add required files check (tar, bzip2, mail, etc.)
 - Create a better del_old_files function (2010-08-01)
-- If you need anything else I'll be happy to do it in my spare time if you ask here: http://www.howtoforge.com/forums/showthread.php?t=41609
+- If you need anything else I'll be happy to do it in my spare time if you ask here: <http://www.howtoforge.com/forums/showthread.php?t=41609>

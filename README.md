@@ -16,6 +16,9 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Low System Impact**: Runs with lowest CPU priority (`nice -n 19`) and Idle I/O priority (`ionice -c3`) to ensure the server remains responsive during backups.
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
+- **Per-Resource Isolation (v0.25.0+)**: Groups all backups for a single resource (website, DB, or mail) into its own subfolder.
+- **Granular Portability**: Easily extract and deliver backups for a single site or database to clients without searching through hundreds of files.
+- **Improved Organization**: Drastically reduced clutter in monthly directories by categorizing and nesting backups.
 
 ## Backup Compression Comparison
 
@@ -28,7 +31,7 @@ Based on a ~1TB sample dataset on **Intel(R) Xeon(R) CPU E3-1275 v5 @ 3.60GHz** 
 | pigz   | Multi     | 3h 05m    | 55 GB     | Faster alternative to gzip using all CPU cores.  |
 | zstd   | Multi     | 1h 25m    | 53 GB     | **Recommended.** Best balance of speed and size. |
 
-## Directory Structure (Version 0.22.0+)
+## Directory Structure (Version 0.25.0+)
 
 The script organizes backups into a clean, modular hierarchy:
 
@@ -37,17 +40,21 @@ The script organizes backups into a clean, modular hierarchy:
 └── YYYY-MM/                          <-- Monthly Root
     ├── log/                          <-- Backup Logs
     │   └── backup-YYYY-MM-DD.log
-    ├── db/                           <-- Database Dumps
-    │   └── db-<dbname>-YYYY-MM-DD.tar.gz
-    ├── web/                          <-- Website Backups
-    │   ├── full_<webfolder>-YYYY-MM-DD.tar.gz
-    │   └── i_<webfolder>-YYYY-MM-DD.tar.gz
-    ├── mail/                         <-- Mail Backups
-    │   ├── full_<mailfolder>-YYYY-MM-DD.tar.gz
-    │   └── i_<mailfolder>-YYYY-MM-DD.tar.gz
-    └── system/                       <-- System Backups
-        ├── full_<sysfolder>-YYYY-MM-DD.tar.gz
-        └── i_<sysfolder>-YYYY-MM-DD.tar.gz
+    ├── db/                           <-- Database Category
+    │   └── db_name/                  <-- Resource Folder
+    │       └── db_name-YYYY-MM-DD.tar.gz
+    ├── web/                          <-- Website Category
+    │   └── folder_name/              <-- Resource Folder
+    │       ├── full-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz
+    ├── mail/                         <-- Mail Category
+    │   └── user_name/                <-- Resource Folder
+    │       ├── full-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz
+    └── system/                       <--- System Category
+        └── sysfolder/                <-- Resource Folder
+            ├── full-YYYY-MM-DD.tar.gz
+            └── i-YYYY-MM-DD.tar.gz
 ```
 
 ## Backup Usage
