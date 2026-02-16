@@ -18,7 +18,7 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 
 ## Backup Compression Comparison
 
-Based on a ~1TB sample dataset.
+Based on a ~1TB sample dataset on **Intel(R) Xeon(R) CPU E3-1275 v5 @ 3.60GHz** (4 cores, 8 threads).
 
 | Format | Threading | Est. Time | Est. Size | Performance Summary                              |
 | :----- | :-------- | :-------- | :-------- | :----------------------------------------------- |

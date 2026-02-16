@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.23.3"
+version="0.24.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -328,7 +328,7 @@ backup () {
 			if [ -n "$SPLIT_SIZE" ]; then
 				B_TARGET="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				if [ -d "$B_TARGET" ]; then
-					log "Database $i already backed up for $FULL_DATE. Skipping."
+					log "Database $i already backed up (split) for $FULL_DATE. Skipping."
 					continue
 				fi
 			else
@@ -345,7 +345,7 @@ backup () {
 				B_DIR="$BACKUP_DIR/$MONTH_DATE/db/db-$i-$FULL_DATE"
 				mkdir -p "$B_DIR"
 				# We pipe tar to split. Tar writes to stdout (-f -)
-				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$B_DIR/part-"; then
+				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$B_DIR/part-"; then
 					log "Dump OK. $i database saved OK! (Split)"
 				else
 					log "Error splitting database backup for $i"
@@ -380,7 +380,7 @@ backup () {
 			if [ -n "$SPLIT_SIZE" ]; then
 				if [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE" ] || \
 				   [ -d "$BACKUP_DIR/$MONTH_DATE/$subfolder/i$UNDERSCORED_DIR-$FULL_DATE" ]; then
-					log "Backup for $TARGET_DIR already exists for $FULL_DATE. Skipping."
+					log "Backup for $TARGET_DIR already exists (split) for $FULL_DATE. Skipping."
 					continue
 				fi
 			else
@@ -406,15 +406,15 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
-					RET=$?
-					if [ $RET -le 1 ]; then
-						mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
-						[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
-					else
-						log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$BACKUP_DIR_NAME.part/part-"
+						RET=$?
+						if [ $RET -le 1 ]; then
+							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+							[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
+						else
+							log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
+						fi
 					fi
-				fi
 			else
 				BACKUP_FILE="$BACKUP_DIR/$MONTH_DATE/$subfolder/full$UNDERSCORED_DIR-$FULL_DATE$COMPRESSION_EXT"
 				rm -f "$BACKUP_FILE.part"
@@ -441,7 +441,7 @@ backup () {
 					if [ ! -d "$BACKUP_DIR_NAME" ]; then
 						rm -rf "$BACKUP_DIR_NAME.part"
 						mkdir -p "$BACKUP_DIR_NAME.part"
-						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" - "$BACKUP_DIR_NAME.part/part-"
+						ionice -c3 nice -n 19 "$TAR" -cpSP $NEWER -f - -X "$TMP_DIR/excluded" "$TARGET_DIR" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$BACKUP_DIR_NAME.part/part-"
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
