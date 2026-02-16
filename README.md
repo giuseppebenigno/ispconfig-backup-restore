@@ -14,6 +14,7 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Parallel Processing**: Automatically uses 4/5 of available CPU cores for `zstd` and `gzip` (only if `pigz` is installed). Regular `gzip` remains single-threaded.
 - **Duplicate Prevention**: Automatically skips backups if they already exist for the current day.
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
+- **Low System Impact**: Runs with lowest CPU priority (`nice -n 19`) and Idle I/O priority (`ionice -c3`) to ensure the server remains responsive during backups.
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 
 ## Backup Compression Comparison
