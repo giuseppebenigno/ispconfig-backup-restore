@@ -16,10 +16,21 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
 
+## Backup Compression Comparison
+
+Based on a ~1TB sample dataset.
+
+| Format | Threading | Est. Time | Est. Size | Performance Summary                              |
+| :----- | :-------- | :-------- | :-------- | :----------------------------------------------- |
+| bz2    | Single    | 17h 00m   | 51 GB     | High compression ratio, extremely slow.          |
+| gzip   | Single    | 8h 15m    | 56 GB     | Legacy format, poor multi-core utilization.      |
+| pigz   | Multi     | 3h 05m    | 55 GB     | Faster alternative to gzip using all CPU cores.  |
+| zstd   | Multi     | 1h 25m    | 53 GB     | **Recommended.** Best balance of speed and size. |
+
 ## Directory Structure (Version 0.22.0+)
- 
+
 The script organizes backups into a clean, modular hierarchy:
- 
+
 ```text
 /var/backup-restore/<hostname>/
 └── YYYY-MM/                          <-- Monthly Root
@@ -130,4 +141,5 @@ tar --zstd -xOf db-name-date.tar.zst | mysql -u user -p db_name
 ```
 
 ---
-*Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>*
+
+_Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>_
