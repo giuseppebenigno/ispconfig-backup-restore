@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.25.2 - 2026-03-05 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **Fix: Un-split Database Backups**: Implemented `.part` temporary extension usage during single-file database dumps (similar to directory backups) to prevent generating incomplete files upon interruption.
+
 ## version 0.25.1 - 2026-02-16 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **New Feature: Selective Component Backups**: Introduced the `-o` / `--only` flag to allow running backups for specific components only.

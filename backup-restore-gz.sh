@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.25.1"
+version="0.25.2"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -65,7 +65,7 @@ EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
 mkdir -p "$TMP_DIR"
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
-MAX_PERCENT_OF_USED_SPACE="80"			# Max percent of used space before start of delete
+MAX_PERCENT_OF_USED_SPACE="85"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 
 EXCLUDED="
@@ -387,8 +387,13 @@ backup () {
 					log "Error splitting database backup for $i"
 				fi
 			else
-				nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$B_TARGET"
-				log "Dump OK. $i database saved OK!"
+				rm -f "$B_TARGET.part"
+				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$B_TARGET.part"; then
+					mv "$B_TARGET.part" "$B_TARGET"
+					log "Dump OK. $i database saved OK!"
+				else
+					log "Error backing up database $i"
+				fi
 			fi
 			rm -rf "$TMP_DIR/db-$i-$FULL_DATE.sql"
 		done
