@@ -1,5 +1,13 @@
 # Changelog
 
+## version 0.26.0 - 2026-04-28 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **Major Feature: SHA256 Integrity Verification**: Automatically generates `.sha256` checksum files for all backups (DB, Web, Mail, System) to allow post-backup validation.
+- **Improved: Pre-flight Tool Verification**: Added a dedicated check at startup to ensure all required system tools (`tar`, `mysqldump`, `sha256sum`, etc.) are available.
+- **Improved: Resource Cleanup (Exit Trap)**: Implemented a robust exit trap mechanism to ensure temporary files in `/var/tmp` are automatically cleaned up even if the script is interrupted or crashes.
+- **Improved: Backup Naming Consistency**: Simplified filenames to include only the compression extension (`.tar.gz` or `.tar.zst`). Folders used for split backups remain extension-less.
+- **Improved: Code Organization**: Moved date variables to global scope and unified pre-flight logic across scripts.
+
 ## version 0.25.2 - 2026-03-05 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **Fix: Un-split Database Backups**: Implemented `.part` temporary extension usage during single-file database dumps (similar to directory backups) to prevent generating incomplete files upon interruption.
@@ -237,6 +245,5 @@ Fixes:
 
 ## TODO
 
-- Add required files check (tar, bzip2, mail, etc.)
 - Create a better del_old_files function (2010-08-01)
 - If you need anything else I'll be happy to do it in my spare time if you ask here: <http://www.howtoforge.com/forums/showthread.php?t=41609>

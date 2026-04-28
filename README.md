@@ -4,6 +4,10 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 
 ## Features
 
+- **SHA256 Integrity Verification (v0.26.0+)**: Automatically generates `.sha256` checksum files for every backup for post-backup validation.
+- **Pre-flight Tool Verification (v0.26.0+)**: Automatically checks for all required system tools (`tar`, `mysqldump`, `sha256sum`, etc.) before execution.
+- **Robust Resource Cleanup (v0.26.0+)**: Uses an exit trap to ensure all temporary files are removed, even if the script is interrupted or crashes.
+- **Improved Clarity (v0.26.0+)**: Redundant category extensions have been removed. Filenames now only show the compression format (e.g., `.tar.gz`), as the category is already clear from the directory structure.
 - **Self-Contained Monthly Backups**: All data (files, databases, and logs) for a month are grouped in a `YYYY-MM` directory.
 - **Incremental & Full Backups**: Automatic full monthly backup followed by daily incremental updates.
 - **Split Backups**: Support for splitting large backup files into manageable parts.
@@ -55,19 +59,28 @@ The script organizes backups into a clean, modular hierarchy:
     │   └── backup-YYYY-MM-DD.log
     ├── db/                           <-- Database Category
     │   └── db_name/                  <-- Resource Folder
-    │       └── db_name-YYYY-MM-DD.tar.gz
+    │       ├── db_name-YYYY-MM-DD.tar.gz
+    │       └── db_name-YYYY-MM-DD.tar.gz.sha256
     ├── web/                          <-- Website Category
     │   └── folder_name/              <-- Resource Folder
-    │       ├── full-YYYY-MM-DD.tar.gz
-    │       └── i-YYYY-MM-DD.tar.gz
+    │       ├── full-YYYY-MM-DD/      <-- Split Backup Directory
+    │       │   ├── part-aa.tar.gz
+    │       │   └── part-ab.tar.gz
+    │       ├── full-YYYY-MM-DD.tar.gz.sha256
+    │       ├── i-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz.sha256
     ├── mail/                         <-- Mail Category
     │   └── user_name/                <-- Resource Folder
     │       ├── full-YYYY-MM-DD.tar.gz
-    │       └── i-YYYY-MM-DD.tar.gz
+    │       ├── full-YYYY-MM-DD.tar.gz.sha256
+    │       ├── i-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz.sha256
     └── system/                       <--- System Category
         └── sysfolder/                <-- Resource Folder
             ├── full-YYYY-MM-DD.tar.gz
-            └── i-YYYY-MM-DD.tar.gz
+            ├── full-YYYY-MM-DD.tar.gz.sha256
+            ├── i-YYYY-MM-DD.tar.gz
+            └── i-YYYY-MM-DD.tar.gz.sha256
 ```
 
 ## Backup Usage
@@ -135,13 +148,13 @@ If you need to extract a backup manually without using the script, use the follo
 **For Gzip (.tar.gz):**
 
 ```bash
-tar -xzvf filename.tar.gz
+tar -xzvf filename.web.tar.gz
 ```
 
 **For Zstd (.tar.zst):**
 
 ```bash
-tar --zstd -xvf filename.tar.zst
+tar --zstd -xvf filename.web.tar.zst
 ```
 
 ### Split Backups (Folders with part-aa, part-ab...)
@@ -167,13 +180,13 @@ To restore a database dump (which is a compressed `.tar.gz` or `.tar.zst` contai
 **For Gzip:**
 
 ```bash
-tar -xOzf db-name-date.tar.gz | mysql -u user -p db_name
+tar -xOzf db-name-date.sql.tar.gz | mysql -u user -p db_name
 ```
 
 **For Zstd:**
 
 ```bash
-tar --zstd -xOf db-name-date.tar.zst | mysql -u user -p db_name
+tar --zstd -xOf db-name-date.sql.tar.zst | mysql -u user -p db_name
 ```
 
 ---

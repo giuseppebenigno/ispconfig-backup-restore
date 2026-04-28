@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.25.2"
+version="0.26.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -108,6 +108,44 @@ SERVICES_TO_STOP=(
 #########################################################
 # You should NOT have to change anything below here     #
 #########################################################
+
+# --- PRE-FLIGHT CHECKS & SETUP ---
+# Pre-flight check: tools
+check_tools() {
+	local tools=("tar" "mysqldump" "mysql" "mysqlcheck" "hostname" "nproc" "df" "awk" "cut" "basename" "mkdir" "rm" "sha256sum" "dirname")
+	if [ -n "${SPLIT_SIZE:-}" ]; then tools+=("split"); fi
+	tools+=("$COMPRESSION_TOOL")
+	
+	for tool in "${tools[@]}"; do
+		if ! command -v "$tool" >/dev/null 2>&1; then
+			echo "Error: Required tool '$tool' not found."
+			exit 1
+		fi
+	done
+}
+check_tools
+
+# Global Date Variables
+MONTH_DATE=$(date +%Y-%m)					# Date, YYYY-MM, eg. 2009-09
+DAY_OF_MONTH=$(date +%d)					# Date of the Month, DD, eg. 27
+FULL_DATE="${MONTH_DATE}-${DAY_OF_MONTH}"	# Full Date, YYYY-MM-DD, year sorted, eg. 2009-11-21
+
+# Cleanup on exit
+cleanup() {
+	local exit_code=$?
+	# Clean up temporary files if they exist
+	if [ -d "$TMP_DIR" ]; then
+		rm -f "$TMP_DIR/db-"*"-${FULL_DATE}.sql"
+		rm -f "$TMP_DIR/maildata"
+		rm -f "$TMP_DIR/excluded"
+		rm -f "$TMP_DIR/full-backup"*".lck"
+		# Remove TMP_DIR only if it's empty
+		rmdir "$TMP_DIR" 2>/dev/null
+	fi
+	exit $exit_code
+}
+trap cleanup EXIT ERR SIGINT SIGTERM
+# --- END PRE-FLIGHT CHECKS ---
 
 # Enable globbing for hidden files (dotglob) and handle empty matches (nullglob)
 shopt -s dotglob nullglob
@@ -249,9 +287,6 @@ backup () {
 	fi
 
 
-	MONTH_DATE=$(date +%Y-%m)					# Date, YYYY-MM, eg. 2009-09
-	DAY_OF_MONTH=$(date +%d)					# Date of the Month, DD, eg. 27
-	FULL_DATE="${MONTH_DATE}-${DAY_OF_MONTH}"	# Full Date, YYYY-MM-DD, year sorted, eg. 2009-11-21
 	# Log file is now inside the monthly directory
 	LOG_FILE=$BACKUP_DIR/$MONTH_DATE/log/backup-$FULL_DATE.log
 
@@ -344,6 +379,17 @@ backup () {
 		fi
 	}
 
+	function generate_checksum {
+		local target="$1"
+		log "Generating SHA256 checksum for $target..."
+		if [ -d "$target" ]; then
+			# For directories (split backups), checksum all parts using relative paths
+			(cd "$(dirname "$target")" && find "$(basename "$target")" -type f -exec sha256sum {} +) > "$target.sha256"
+		elif [ -f "$target" ]; then
+			(cd "$(dirname "$target")" && sha256sum "$(basename "$target")") > "$target.sha256"
+		fi
+	}
+
 	function db_backup {
 		#Replace / with _ in dir name => filename
 		#DIR_NAME=$(echo "$DIRECTORIES" | awk '{gsub("/", "_", $0); print}')
@@ -382,6 +428,7 @@ backup () {
 				# We pipe tar to split. Tar writes to stdout (-f -)
 				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS | split -b "$SPLIT_SIZE" --additional-suffix="$COMPRESSION_EXT" - "$B_TARGET.part/part-"; then
 					mv "$B_TARGET.part" "$B_TARGET"
+					generate_checksum "$B_TARGET"
 					log "Dump OK. $i database saved OK! (Split)"
 				else
 					log "Error splitting database backup for $i"
@@ -390,6 +437,7 @@ backup () {
 				rm -f "$B_TARGET.part"
 				if nice -n 19 "$TAR" -cpSP -f - -C "$TMP_DIR" "db-$i-$FULL_DATE.sql" | "$COMPRESSION_TOOL" $COMPRESS_ARGS > "$B_TARGET.part"; then
 					mv "$B_TARGET.part" "$B_TARGET"
+					generate_checksum "$B_TARGET"
 					log "Dump OK. $i database saved OK!"
 				else
 					log "Error backing up database $i"
@@ -440,6 +488,7 @@ backup () {
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+							generate_checksum "$BACKUP_DIR_NAME"
 							[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (split to $subfolder)."
 						else
 							log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
@@ -454,6 +503,7 @@ backup () {
 						RET=$?
 						if [ $RET -le 1 ]; then
 							mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+							generate_checksum "$BACKUP_FILE"
 							[ $RET -eq 1 ] && log "Full monthly backup of $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Full monthly backup of $TARGET_DIR done (to $subfolder)."
 						else
 							log "Error backing up $TARGET_DIR - Exit code: $RET"
@@ -476,6 +526,7 @@ backup () {
 							RET=$?
 							if [ $RET -le 1 ]; then
 								mv "$BACKUP_DIR_NAME.part" "$BACKUP_DIR_NAME"
+								generate_checksum "$BACKUP_DIR_NAME"
 								[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (split to $subfolder)." || log "Incremental backup for $TARGET_DIR done (split to $subfolder)."
 							else
 								log "Error backing up $TARGET_DIR (split) - Exit code: $RET"
@@ -490,6 +541,7 @@ backup () {
 							RET=$?
 							if [ $RET -le 1 ]; then
 								mv "$BACKUP_FILE.part" "$BACKUP_FILE"
+								generate_checksum "$BACKUP_FILE"
 								[ $RET -eq 1 ] && log "Incremental backup for $TARGET_DIR done with non-fatal warnings (to $subfolder)." || log "Incremental backup for $TARGET_DIR done (to $subfolder)."
 							else
 								log "Error backing up $TARGET_DIR - Exit code: $RET"
@@ -750,11 +802,11 @@ restore() {
 			[ -d "$B_SYSTEM" ] && B_SEARCH_DIRS+=("$B_SYSTEM")
 
 			if [ "$dir" = "all" ]; then
-				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full-)
-				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -v "/full-" | grep -vE "/(db-|log/)")
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full- | grep -v "\.sha256$")
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep -v "/full-" | grep -vE "/(db-|log/)" | grep -v "\.sha256$")
 			else
-				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep /full-)
-				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep -v "/full-" | grep -vE "/(db-|log/)")
+				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep /full- | grep -v "\.sha256$")
+				arh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep "/$dir/" | grep -v "/full-" | grep -vE "/(db-|log/)" | grep -v "\.sha256$")
 			fi
 
 			# Filter out entries that are not in the child level of our resource dirs (to avoid finding files inside parts folders if they weren't sed'd out)
@@ -798,9 +850,9 @@ restore() {
 			if [ "$d" == "$2" ] || [ "$2" == "all" ]; then
 				if [ "$2" = "all" ]; then
 					# get db list from backup and restore all db's
-					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | grep -v "\.sha256$")
 				else
-					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-$db/" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH)
+					arh=$(find "$DB_ROOT" -maxdepth 2 \( -type f -o -type d \) 2>/dev/null | grep "/db-$db/" | grep $YDATE-$MONTH_DATE-$DAY_OF_MONTH | grep -v "\.sha256$")
 				fi
 				for i in $arh; do
 					rdb=$(basename "$i" | cut -d "-" -f2)
