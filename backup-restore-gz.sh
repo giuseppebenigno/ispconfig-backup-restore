@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.26.0"
+version="0.26.1"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -65,7 +65,7 @@ EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
 mkdir -p "$TMP_DIR"
 DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
-MAX_PERCENT_OF_USED_SPACE="85"			# Max percent of used space before start of delete
+MAX_PERCENT_OF_USED_SPACE="90"			# Max percent of used space before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 
 EXCLUDED="
@@ -95,6 +95,10 @@ EXCLUDED="
 REBOOT_ON_FINISH=false				# Reboot system after backup
 
 # Services to stop before reboot (space separated list or array)
+# IMPORTANT: The services will be stopped exactly in the order they are listed here.
+# For example, if you use a process monitor like 'monit', it MUST be the first
+# service to be stopped. Otherwise, it might restart services (like apache)
+# immediately after the script stops them.
 SERVICES_TO_STOP=(
 	monit gogs seafile cron munin bind9 dovecot postfix
 	apache2 mysqld certbot.timer clamav-daemon

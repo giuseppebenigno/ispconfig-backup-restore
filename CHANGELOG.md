@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.26.1 - 2026-05-03 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **Improved: Service Shutdown**: Documented the critical importance of service order in `SERVICES_TO_STOP` and added explicit warnings about `monit`.
+
 ## version 0.26.0 - 2026-04-28 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **Major Feature: SHA256 Integrity Verification**: Automatically generates `.sha256` checksum files for all backups (DB, Web, Mail, System) to allow post-backup validation.

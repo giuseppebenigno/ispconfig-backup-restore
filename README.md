@@ -91,6 +91,13 @@ Backup is designed to be non-interactive and run via cron.
 2. **Daily runs**: Incremental backups are created based on the date of the full backup.
 3. **Space Management**: If `DELETE_OLD="yes"`, the script automatically deletes the oldest monthly directory when disk usage exceeds `MAX_PERCENT_OF_USED_SPACE`.
 
+### Service Management on Reboot
+
+If you enable `REBOOT_ON_FINISH="true"`, the script will stop the services defined in the `SERVICES_TO_STOP` array before rebooting. 
+
+> [!WARNING]
+> The services are stopped in the **exact order** they are listed in the array. If you use a process monitor like `monit`, make sure it is the **first** service in the list. If it isn't, `monit` will detect that services (like `apache2`) have been stopped and immediately try to restart them while the script is running!
+
 ### Selective Backup
 
 You can run individual backup tasks by passing the `-o` or `--only` flag:
