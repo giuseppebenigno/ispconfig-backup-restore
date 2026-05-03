@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.26.1"
+version="0.26.2"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -64,8 +64,8 @@ SPLIT_SIZE="1G"
 EXTRACT_ARGS="-xpf"					# tar extract arguments
 TMP_DIR="/var/tmp/backup-restore"		# temp dir for database dump and other stuff
 mkdir -p "$TMP_DIR"
-DELETE_OLD="yes"						# Enable delete of files if used space percent > than $MAX_PERCENT_OF_USED_SPACE (yes or anything else)
-MAX_PERCENT_OF_USED_SPACE="90"			# Max percent of used space before start of delete
+DELETE_OLD="yes"						# Enable delete of files if free space < than $MIN_FREE_SPACE_GB (yes or anything else)
+MIN_FREE_SPACE_GB="100"			# Minimum free space in GB before start of delete
 LAST_MINUTE_OF_THE_DAY="2359"			# last minute of the day = last minute of the restored backup of the day restored
 
 EXCLUDED="
@@ -361,14 +361,12 @@ backup () {
 		#fi
 	}
 
-	#PERCENT_OF_USED_DISK="95" # for test
 	function check_space {
-		#PERCENT_OF_USED_DISK=$((PERCENT_OF_USED_DISK-1)) # for test
-		PERCENT_OF_USED_DISK=$(df -h "$BACKUP_DIR" | awk 'NR==2{print $5}' | cut -d% -f 1)
-		#PERCENT_OF_USED_DISK="90"
+		FREE_SPACE_KB=$(df -P -k "$BACKUP_DIR" | awk 'NR==2{print $4}')
+		FREE_SPACE_GB=$(( FREE_SPACE_KB / 1024 / 1024 ))
 
-		if [ "$PERCENT_OF_USED_DISK" -gt "$MAX_PERCENT_OF_USED_SPACE" ];then
-			log "There is $PERCENT_OF_USED_DISK% space used on $BACKUP_DIR"
+		if [ "$FREE_SPACE_GB" -lt "$MIN_FREE_SPACE_GB" ];then
+			log "There is only ${FREE_SPACE_GB}GB free space on $BACKUP_DIR"
 			if [ "$DELETE_OLD" = "yes" ]; then
 				del_old_files
 			else
@@ -379,7 +377,7 @@ backup () {
 				exit
 			fi
 		else
-			log "Percent used space $PERCENT_OF_USED_DISK% on $BACKUP_DIR ok."
+			log "Free space ${FREE_SPACE_GB}GB on $BACKUP_DIR ok."
 		fi
 	}
 

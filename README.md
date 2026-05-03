@@ -89,7 +89,10 @@ Backup is designed to be non-interactive and run via cron.
 
 1. **First run of the month**: A permanent full backup is created.
 2. **Daily runs**: Incremental backups are created based on the date of the full backup.
-3. **Space Management**: If `DELETE_OLD="yes"`, the script automatically deletes the oldest monthly directory when disk usage exceeds `MAX_PERCENT_OF_USED_SPACE`.
+3. **Space Management**: At the **very beginning** of each run, the script checks the disk space. If free space is below `MIN_FREE_SPACE_GB`:
+   - If `DELETE_OLD="yes"`, it automatically deletes the oldest monthly backup(s) until enough space is freed up, then proceeds with the backup.
+   - If `DELETE_OLD="no"` (or if no space could be freed), the script **aborts immediately**, sends an alert email, and does not perform the backup.
+   *(Note: Set `MIN_FREE_SPACE_GB` large enough to accommodate the size of the upcoming backup, as no further space checks are done during the archiving process).*
 
 ### Service Management on Reboot
 

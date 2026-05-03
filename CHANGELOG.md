@@ -1,5 +1,9 @@
 # Changelog
 
+## version 0.26.2 - 2026-05-03 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **Improved: Disk Space Management**: Replaced percentage-based disk usage check (`MAX_PERCENT_OF_USED_SPACE`) with a fixed minimum free space check in GB (`MIN_FREE_SPACE_GB`). This better utilizes space on large disks.
+
 ## version 0.26.1 - 2026-05-03 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **Improved: Service Shutdown**: Documented the critical importance of service order in `SERVICES_TO_STOP` and added explicit warnings about `monit`.
