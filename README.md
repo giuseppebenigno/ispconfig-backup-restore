@@ -36,6 +36,10 @@ The script categorizes backups into four main groups, which can be toggled via t
 | **`WEB`**    | `/var/www`      | Global files in `/var/www` and all ISPConfig sites in `/var/www/clients/clientN/webM`. |
 | **`MAIL`**   | `/var/vmail`    | All mailboxes, domains, and mail configurations.                                       |
 | **`SYSTEM`** | `/etc` & `/var` | System configurations and general `/var` data (excluding web, mail, and backup root).  |
+| **`APPS`**   | `/opt`, `/srv`  | Granular backups for third-party programs and Docker projects (each subfolder is a resource). |
+
+> [!TIP]
+> **Pro Tip for Docker Users**: Use `/srv` to host your Docker projects (e.g., `/srv/my-app`, `/srv/another-project`). The script will automatically detect each subfolder and create a **separate, granular backup** for each project within the `apps/` category. This makes it easy to restore or move individual containers/projects.
 
 ## Backup Compression Comparison
 
@@ -48,7 +52,7 @@ Based on a ~1TB sample dataset on **Intel(R) Xeon(R) CPU E3-1275 v5 @ 3.60GHz** 
 | pigz   | Multi     | 3h 05m    | 55 GB     | Faster alternative to gzip using all CPU cores.  |
 | zstd   | Multi     | 1h 25m    | 53 GB     | **Recommended.** Best balance of speed and size. |
 
-## Directory Structure (Version 0.25.0+)
+## Directory Structure (Version 0.27.0+)
 
 The script organizes backups into a clean, modular hierarchy:
 
@@ -75,8 +79,14 @@ The script organizes backups into a clean, modular hierarchy:
     │       ├── full-YYYY-MM-DD.tar.gz.sha256
     │       ├── i-YYYY-MM-DD.tar.gz
     │       └── i-YYYY-MM-DD.tar.gz.sha256
-    └── system/                       <--- System Category
-        └── sysfolder/                <-- Resource Folder
+    ├── system/                       <--- System Category
+    │   └── sysfolder/                <-- Resource Folder
+    │       ├── full-YYYY-MM-DD.tar.gz
+    │       ├── full-YYYY-MM-DD.tar.gz.sha256
+    │       ├── i-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz.sha256
+    └── apps/                         <--- Apps Category
+        └── appfolder/                <-- Resource Folder
             ├── full-YYYY-MM-DD.tar.gz
             ├── full-YYYY-MM-DD.tar.gz.sha256
             ├── i-YYYY-MM-DD.tar.gz

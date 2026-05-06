@@ -1,5 +1,10 @@
 # Changelog
 
+## version 0.27.0 - 2026-05-06 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
+
+- **New Category: APPS**: Introduced a dedicated category for granular backups of `/opt` and `/srv` directories, separating third-party programs and Docker projects from core system configurations.
+- **Improved Organization**: Automatic detection and granular resource management for all subdirectories in `/opt` and `/srv`.
+
 ## version 0.26.2 - 2026-05-03 (by Giuseppe Benigno <giuseppe.benigno@gmail.com>)
 
 - **Improved: Disk Space Management**: Replaced percentage-based disk usage check (`MAX_PERCENT_OF_USED_SPACE`) with a fixed minimum free space check in GB (`MIN_FREE_SPACE_GB`). This better utilizes space on large disks.
