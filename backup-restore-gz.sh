@@ -1,7 +1,7 @@
 #!/bin/bash
 set -o pipefail
 set -u
-version="0.26.2"
+version="0.27.0"
 # CHANGELOG: see CHANGELOG.md
 #
 # Copyright (c) Giuseppe Benigno <giuseppe.benigno@gmail.com>
@@ -18,6 +18,7 @@ BACKUP_DB="yes"
 BACKUP_WEB="yes"
 BACKUP_MAIL="yes"
 BACKUP_SYSTEM="yes"
+BACKUP_APPS="yes"
 BACKUP_ROOT_DIR="/var/backup-restore"			# base directory for backups
 COMPUTER=$(hostname -f)					# name of this computer
 BACKUP_DIR="${BACKUP_ROOT_DIR}/${COMPUTER}"	# where to store the backups
@@ -157,6 +158,7 @@ shopt -s dotglob nullglob
 SYSTEM_DIRECTORIES=("/etc")
 WEB_DIRECTORIES=()
 MAIL_DIRECTORIES=()
+APPS_DIRECTORIES=()
 
 # Function to check if a path is excluded
 is_excluded() {
@@ -181,6 +183,16 @@ if [[ -d "$VAR_DIR" ]]; then
 		fi
 	done
 fi
+
+# Add /opt and /srv to APPS_DIRECTORIES (granularly)
+for extra_dir in "/opt" "/srv"; do
+	if [[ -d "$extra_dir" ]]; then
+		for path in "$extra_dir"/*; do
+			if is_excluded "$path"; then continue; fi
+			APPS_DIRECTORIES+=("$path")
+		done
+	fi
+done
 
 # Add /var/www excluding subdirectories of /var/www/clients and all subdirectories of /var/www/clients to WEB_DIRECTORIES
 if [[ -d "$VAR_DIR/$WWW_DIR" ]]; then
@@ -231,7 +243,7 @@ and it's supposed to be run from cron.
 The restore part it's supposed to be run from command line.
 backup part Usage:
 \t $me
-\t $me -o|--only [db,web,mail,system,all]
+\t $me -o|--only [db,web,mail,system,apps,all]
 
 restore part Usage:
 \t $me [type-of-restore] [dir|db] [YYYY-MM-DD] [path]
@@ -254,7 +266,7 @@ EOF
 backup () {
 	if [ "${1:-}" == "-o" ] || [ "${1:-}" == "--only" ]; then
 		if [ -z "${2:-}" ]; then
-			echo "Error: -o|--only requires an argument (db,web,mail,system,all)"
+			echo "Error: -o|--only requires an argument (db,web,mail,system,apps,all)"
 			print_usage
 			exit 1
 		fi
@@ -264,6 +276,7 @@ backup () {
 		BACKUP_WEB="no"
 		BACKUP_MAIL="no"
 		BACKUP_SYSTEM="no"
+		BACKUP_APPS="no"
 
 		IFS=',' read -ra ADDR <<< "$2"
 		for component in "${ADDR[@]}"; do
@@ -272,11 +285,13 @@ backup () {
 				web) BACKUP_WEB="yes" ;;
 				mail) BACKUP_MAIL="yes" ;;
 				system) BACKUP_SYSTEM="yes" ;;
+				apps) BACKUP_APPS="yes" ;;
 				all)
 					BACKUP_DB="yes"
 					BACKUP_WEB="yes"
 					BACKUP_MAIL="yes"
 					BACKUP_SYSTEM="yes"
+					BACKUP_APPS="yes"
 					;;
 				*)
 					echo "Error: Invalid component '$component'"
@@ -323,8 +338,8 @@ backup () {
 
 	function check_mdir {
 		log "Checking if month dirs exist: $BACKUP_DIR/$MONTH_DATE"
-		mkdir -p "$BACKUP_DIR/$MONTH_DATE"/{db,web,mail,system,log}
-		log "Month subdirs (db, web, mail, system, log) ensured"
+		mkdir -p "$BACKUP_DIR/$MONTH_DATE"/{db,web,mail,system,apps,log}
+		log "Month subdirs (db, web, mail, system, apps, log) ensured"
 	}
 
 	function check_tempdir {
@@ -610,6 +625,11 @@ backup () {
 		log "Starting system backups (system/)..."
 		dirs_backup "system" "SYSTEM_DIRECTORIES"
 	fi
+ 
+	if [ x"${BACKUP_APPS}" == "xyes" ]; then
+		log "Starting apps backups (apps/)..."
+		dirs_backup "apps" "APPS_DIRECTORIES"
+	fi
 
 	# End of script
 	log "All backup jobs done. Exiting script!"
@@ -622,7 +642,7 @@ backup () {
 	# Calculate sizes
 	FULL_SIZE="0"
 	# Search for full backups in the subfolders of the current month
-	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE"/{web,system,mail}/full* 2>/dev/null | tail -n1 | awk '{print $1}')
+	FULL_CHECK=$(du -ch "$BACKUP_DIR/$MONTH_DATE"/{web,system,mail,apps}/full* 2>/dev/null | tail -n1 | awk '{print $1}')
 	if [ -n "$FULL_CHECK" ]; then
 		FULL_SIZE=$FULL_CHECK
 	fi
@@ -766,7 +786,7 @@ restore() {
 				sleep 5 # We wait 5 secs for the user to see what's happening.
 			else
 				# We suppose the user uses /dir
-				if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} all" =~ "$2" ]]; then
+				if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} ${APPS_DIRECTORIES[*]} all" =~ "$2" ]]; then
 					echo -en "\nTrying to restore $2 dir's backup from date $3 to $path:\n\n"
 					# we say "trying" because if the requested dir is "al" it matches!
 					sleep 5
@@ -793,15 +813,17 @@ restore() {
 	touch -t $YDATE$MONTH_DATE$dst $TMP_DIR/datestart 2>&1
 	touch -t $YDATE$MONTH_DATE$DAY_OF_MONTH$LAST_MINUTE_OF_THE_DAY $TMP_DIR/dateend 2>&1
 	if [ "$type" = "dir" ]; then
-		if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} all" =~ "$2" ]]; then
+		if [[ "${SYSTEM_DIRECTORIES[*]} ${WEB_DIRECTORIES[*]} ${MAIL_DIRECTORIES[*]} ${APPS_DIRECTORIES[*]} all" =~ "$2" ]]; then
 			# Search for requested directories in web, mail, and system subdirectories
 			B_WEB="$BACKUP_DIR/$YDATE-$MONTH_DATE/web"
 			B_MAIL="$BACKUP_DIR/$YDATE-$MONTH_DATE/mail"
 			B_SYSTEM="$BACKUP_DIR/$YDATE-$MONTH_DATE/system"
+			B_APPS="$BACKUP_DIR/$YDATE-$MONTH_DATE/apps"
 			B_SEARCH_DIRS=()
 			[ -d "$B_WEB" ] && B_SEARCH_DIRS+=("$B_WEB")
 			[ -d "$B_MAIL" ] && B_SEARCH_DIRS+=("$B_MAIL")
 			[ -d "$B_SYSTEM" ] && B_SEARCH_DIRS+=("$B_SYSTEM")
+			[ -d "$B_APPS" ] && B_SEARCH_DIRS+=("$B_APPS")
 
 			if [ "$dir" = "all" ]; then
 				farh=$(find "${B_SEARCH_DIRS[@]}" -maxdepth 2 \( -type f -o -type d \) -newer "$TMP_DIR/datestart" -a ! -newer "$TMP_DIR/dateend" 2>/dev/null | grep /full- | grep -v "\.sha256$")

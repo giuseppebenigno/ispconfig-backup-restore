@@ -19,12 +19,13 @@ A robust backup and restore system for ISPConfig (databases and directories) wit
 - **Duplicate Prevention**: Automatically skips backups if they already exist for the current day.
 - **Improved Reliability**: Tolerates non-fatal `tar` warnings (Exit Code 1) and automatically excludes transient files (Maildir tmp).
 - **Low System Impact**: Runs with lowest CPU priority (`nice -n 19`) and Idle I/O priority (`ionice -c3`) to ensure the server remains responsive during backups.
-- **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, and `BACKUP_SYSTEM`.
+- **Flexible Options**: Granular toggles for `BACKUP_DB`, `BACKUP_WEB`, `BACKUP_MAIL`, `BACKUP_SYSTEM`, and `BACKUP_APPS`.
 - **Selective Backup (-o/--only)**: Run only specific components from the command line (e.g., `--only db,mail`).
 - **Per-Resource Isolation (v0.25.0+)**: Groups all backups for a single resource (website, DB, or mail) into its own subfolder.
 - **Granular Portability**: Easily extract and deliver backups for a single site or database to clients without searching through hundreds of files.
 - **Improved Organization**: Drastically reduced clutter in monthly directories by categorizing and nesting backups.
 - **Granular Control**: Precision toggles for selective backups of databases, websites, mail, or system files.
+- **APPS Category (v0.27.0+)**: Dedicated backup category for `/opt` and `/srv` directories. Each subfolder is automatically detected and backed up as a separate, independent resource.
 
 ## Backup Categories
 
@@ -36,6 +37,10 @@ The script categorizes backups into four main groups, which can be toggled via t
 | **`WEB`**    | `/var/www`      | Global files in `/var/www` and all ISPConfig sites in `/var/www/clients/clientN/webM`. |
 | **`MAIL`**   | `/var/vmail`    | All mailboxes, domains, and mail configurations.                                       |
 | **`SYSTEM`** | `/etc` & `/var` | System configurations and general `/var` data (excluding web, mail, and backup root).  |
+| **`APPS`**   | `/opt`, `/srv`  | Granular backups for third-party programs and Docker projects (each subfolder is a resource). |
+
+> [!TIP]
+> **Pro Tip for Docker Users**: Use `/srv` to host your Docker projects (e.g., `/srv/my-app`, `/srv/another-project`). The script will automatically detect each subfolder and create a **separate, granular backup** for each project within the `apps/` category. This makes it easy to restore or move individual containers/projects.
 
 ## Backup Compression Comparison
 
@@ -48,7 +53,7 @@ Based on a ~1TB sample dataset on **Intel(R) Xeon(R) CPU E3-1275 v5 @ 3.60GHz** 
 | pigz   | Multi     | 3h 05m    | 55 GB     | Faster alternative to gzip using all CPU cores.  |
 | zstd   | Multi     | 1h 25m    | 53 GB     | **Recommended.** Best balance of speed and size. |
 
-## Directory Structure (Version 0.25.0+)
+## Directory Structure (Version 0.27.0+)
 
 The script organizes backups into a clean, modular hierarchy:
 
@@ -75,8 +80,14 @@ The script organizes backups into a clean, modular hierarchy:
     │       ├── full-YYYY-MM-DD.tar.gz.sha256
     │       ├── i-YYYY-MM-DD.tar.gz
     │       └── i-YYYY-MM-DD.tar.gz.sha256
-    └── system/                       <--- System Category
-        └── sysfolder/                <-- Resource Folder
+    ├── system/                       <--- System Category
+    │   └── sysfolder/                <-- Resource Folder
+    │       ├── full-YYYY-MM-DD.tar.gz
+    │       ├── full-YYYY-MM-DD.tar.gz.sha256
+    │       ├── i-YYYY-MM-DD.tar.gz
+    │       └── i-YYYY-MM-DD.tar.gz.sha256
+    └── apps/                         <--- Apps Category
+        └── appfolder/                <-- Resource Folder
             ├── full-YYYY-MM-DD.tar.gz
             ├── full-YYYY-MM-DD.tar.gz.sha256
             ├── i-YYYY-MM-DD.tar.gz
